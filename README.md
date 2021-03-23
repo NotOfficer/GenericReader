@@ -8,10 +8,30 @@ A generic binary reader for .NET
 
 </div>
 
-## NuGet
+## Example Usage
 
-    Install-Package GenericReader
+```cs
+using GenericReader;
 
-## Usage
+{
+    using var reader = new GenericStreamReader(@"C:\Test\Example.bin");
+    var testNum = reader.Read<uint>();
+}
 
-A detailed documentation isn't available right now.
+{
+    var buffer = System.IO.File.ReadAllBytes(@"C:\Test\Example.bin");
+    using var reader = new GenericBufferReader(buffer);
+    var testNum = reader.Read<uint>();
+}
+```
+
+### NuGet
+
+```md
+Install-Package GenericReader
+```
+
+### Contribute
+
+If you can provide any help, may it only be spell checking please contribute!  
+I am open for any contribution.
