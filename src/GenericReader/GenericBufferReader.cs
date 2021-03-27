@@ -39,13 +39,7 @@ namespace GenericReader
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T Read<T>() where T : unmanaged
 		{
-			T result;
-
-			fixed (byte* p = &_buffer[_position])
-			{
-				result = *(T*)p;
-			}
-
+			var result = Unsafe.ReadUnaligned<T>(ref _buffer[_position]);
 			var size = sizeof(T);
 			_position += size;
 			return result;
@@ -92,13 +86,7 @@ namespace GenericReader
 			}
 
 			var result = new byte[length];
-
-			fixed (byte* pResult = result)
-			fixed (byte* pBuffer = &_buffer[_position])
-			{
-				Unsafe.CopyBlockUnaligned(pResult, pBuffer, (uint)length);
-			}
-
+			Unsafe.CopyBlockUnaligned(ref result[0], ref _buffer[_position], (uint)length);
 			_position += length;
 			return result;
 		}
@@ -237,13 +225,7 @@ namespace GenericReader
 
 			var size = length * sizeof(T);
 			var result = new T[length];
-
-			fixed (T* pResult = result)
-			fixed (byte* pBuffer = &_buffer[_position])
-			{
-				Unsafe.CopyBlockUnaligned(pResult, pBuffer, (uint)size);
-			}
-
+			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _buffer[_position], (uint)size);
 			_position += size;
 			return result;
 		}

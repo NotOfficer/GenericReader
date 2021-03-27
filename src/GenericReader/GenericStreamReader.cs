@@ -36,11 +36,7 @@ namespace GenericReader
 		{
 			var size = sizeof(T);
 			var buffer = ReadBytes(size);
-
-			fixed (byte* p = buffer)
-			{
-				return *(T*)p;
-			}
+			return Unsafe.ReadUnaligned<T>(ref buffer[0]);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -48,13 +44,8 @@ namespace GenericReader
 		{
 			var size = sizeof(T);
 			var buffer = ReadBytes(size, offset, origin);
-
-			fixed (byte* p = buffer)
-			{
-				return *(T*)p;
-			}
+			return Unsafe.ReadUnaligned<T>(ref buffer[0]);
 		}
-
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool ReadBoolean()
@@ -227,38 +218,16 @@ namespace GenericReader
 
 			var size = length * sizeof(T);
 			var buffer = ReadBytes(size);
-
 			var result = new T[length];
-
-			fixed (T* pResult = result)
-			fixed (byte* pBuffer = buffer)
-			{
-				Unsafe.CopyBlockUnaligned(pResult, pBuffer, (uint)size);
-			}
-
+			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
 			return result;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T[] ReadArray<T>(int length, int offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged
 		{
-			if (length == 0)
-			{
-				return Array.Empty<T>();
-			}
-
-			var size = length * sizeof(T);
-			var buffer = ReadBytes(size, offset, origin);
-
-			var result = new T[length];
-
-			fixed (T* pResult = result)
-			fixed (byte* pBuffer = buffer)
-			{
-				Unsafe.CopyBlockUnaligned(pResult, pBuffer, (uint)size);
-			}
-
-			return result;
+			Seek(offset, origin);
+			return ReadArray<T>(length);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -341,7 +310,7 @@ namespace GenericReader
 
 		public void Dispose()
 		{
-			_stream.Dispose();
+			_stream?.Dispose();
 		}
 	}
 }
