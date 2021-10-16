@@ -5,7 +5,7 @@ using System.Text;
 
 namespace GenericReader
 {
-	public sealed unsafe class GenericStreamReader : IGenericReader
+	public unsafe class GenericStreamReader : IGenericReader
 	{
 		private readonly Stream _stream;
 

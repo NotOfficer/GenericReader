@@ -5,7 +5,7 @@ using System.Text;
 
 namespace GenericReader
 {
-	public sealed unsafe class GenericBufferReader : IGenericReader
+	public unsafe class GenericBufferReader : IGenericReader
 	{
 		private readonly byte[] _buffer;
 
