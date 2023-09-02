@@ -1,320 +1,197 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace GenericReader
+using Microsoft.Win32.SafeHandles;
+
+namespace GenericReader;
+
+public class GenericBufferReader : GenericReaderBase
 {
-	public unsafe class GenericBufferReader : IGenericReader
+	private readonly Memory<byte> _memory;
+
+	public GenericBufferReader(byte[] buffer, int start, int length) : this(new Memory<byte>(buffer, start, length)) { }
+	public GenericBufferReader(byte[] buffer) : this(new Memory<byte>(buffer)) { }
+	public GenericBufferReader(ReadOnlyMemory<byte> memory) : this(MemoryMarshal.AsMemory(memory)) { }
+	public GenericBufferReader(Memory<byte> memory)
 	{
-		private readonly byte[] _buffer;
+		_memory = memory;
+		LengthLong = Length = memory.Length;
+	}
 
-		public GenericBufferReader(byte[] buffer)
+	public override int Position { get; set; }
+
+	public override long PositionLong
+	{
+		get => Position;
+		set => Position = int.CreateChecked(value);
+	}
+
+	public override TPosition GetPosition<TPosition>()
+	{
+		return TPosition.CreateChecked(Position);
+	}
+
+	public override void SetPosition<TPosition>(TPosition position)
+	{
+		Position = int.CreateChecked(position);
+	}
+
+	public override int Length { get; }
+	public override long LengthLong { get; }
+
+	public override TLength GetLength<TLength>()
+	{
+		return TLength.CreateChecked(Length);
+	}
+
+	public override int Seek<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+	{
+		SeekVoid(offset, origin);
+		return Position;
+	}
+
+	public override long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+	{
+		SeekVoid(offset, origin);
+		return Position;
+	}
+
+	public override void SeekVoid<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+	{
+		Position = origin switch
 		{
-			_buffer = buffer;
-			Size = buffer.Length;
-		}
+			SeekOrigin.Begin => int.CreateChecked(offset),
+			SeekOrigin.Current => Position + int.CreateChecked(offset),
+			SeekOrigin.End => Length + int.CreateChecked(offset),
+			_ => throw new ArgumentOutOfRangeException(nameof(origin), origin, null)
+		};
+	}
 
-		public int Size { get; }
+	public override T Read<T>() where T : struct
+	{
+		var result = Unsafe.ReadUnaligned<T>(ref _memory.Span[Position]);
+		var size = Unsafe.SizeOf<T>();
+		Position += size;
+		return result;
+	}
 
-		private int _position;
-		public long Position
+	public override string ReadString(int length, Encoding enc)
+	{
+		var result = enc.GetString(_memory.Span.Slice(Position, length));
+		Position += length;
+		return result;
+	}
+
+	public override string ReadFString()
+	{
+		// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
+		var length = Read<int>();
+		if (length == 0)
+			return string.Empty;
+
+		// 1 byte/char is removed because of null terminator ('\0')
+		if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
 		{
-			get => _position;
-			set => _position = (int)value;
-		}
+			// If length cannot be negated due to integer overflow, Ar is corrupted.
+			if (length == int.MinValue)
+				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public int Seek(int offset, SeekOrigin origin)
-		{
-			return _position = origin switch
-			{
-				SeekOrigin.Begin => offset,
-				SeekOrigin.Current => offset + _position,
-				SeekOrigin.End => _buffer.Length + offset,
-				_ => throw new ArgumentOutOfRangeException(nameof(origin), origin, null)
-			};
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T Read<T>() where T : unmanaged
-		{
-			var result = Unsafe.ReadUnaligned<T>(ref _buffer[_position]);
-			var size = sizeof(T);
-			_position += size;
+			var pLength = length * -sizeof(char);
+			var span = _memory.Span.Slice(Position, pLength - sizeof(char));
+			var result = Encoding.Unicode.GetString(span);
+			Position += pLength;
 			return result;
 		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T Read<T>(int offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged
+		else
 		{
-			Seek(offset, origin);
-			return Read<T>();
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool ReadBoolean()
-		{
-			return Read<int>() != 0;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool ReadBoolean(int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			return Read<int>(offset, origin) != 0;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public byte ReadByte()
-		{
-			return _buffer[_position++];
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public byte ReadByte(int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return _buffer[_position++];
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public byte[] ReadBytes(int length)
-		{
-			if (length == 0)
-			{
-				return Array.Empty<byte>();
-			}
-
-			var result = new byte[length];
-			Unsafe.CopyBlockUnaligned(ref result[0], ref _buffer[_position], (uint)length);
-			_position += length;
+			var span = _memory.Span.Slice(Position, length - 1);
+			var result = Encoding.UTF8.GetString(span);
+			Position += length;
 			return result;
 		}
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public byte[] ReadBytes(int length, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadBytes(length);
-		}
+	public override T[] ReadArray<T>(int length) where T : struct
+	{
+		if (length == 0)
+			return Array.Empty<T>();
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadString(Encoding enc)
-		{
-			var length = Read<int>();
-			return ReadString(length, enc);
-		}
+		var size = length * Unsafe.SizeOf<T>();
+		var result = new T[length];
+		Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _memory.Span[Position], (uint)size);
+		Position += size;
+		return result;
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadString(Encoding enc, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			var length = Read<int>(offset, origin);
-			return ReadString(length, enc);
-		}
+	public GenericBufferReader Slice(int start, bool sliceAtPosition = false)
+	{
+		var sliceStart = sliceAtPosition ? start + Position : start;
+		return new GenericBufferReader(_memory.Slice(sliceStart));
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadString(int length, Encoding enc)
-		{
-			var result = enc.GetString(_buffer, _position, length);
-			_position += length;
-			return result;
-		}
+	public GenericBufferReader Slice(int start, int length, bool sliceAtPosition = false)
+	{
+		var sliceStart = sliceAtPosition ? start + Position : start;
+		return new GenericBufferReader(_memory.Slice(sliceStart, length));
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadString(int length, Encoding enc, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadString(length, enc);
-		}
+	public static GenericBufferReader LoadFromFile(SafeFileHandle handle)
+	{
+		var length = RandomAccess.GetLength(handle);
+		var buffer = new byte[length];
+		RandomAccess.Read(handle, buffer, 0);
+		return new GenericBufferReader(buffer);
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadFString()
-		{
-			// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
-			var length = Read<int>();
+	public static async ValueTask<GenericBufferReader> LoadFromFileAsync(SafeFileHandle handle,
+		CancellationToken cancellationToken = default)
+	{
+		var length = RandomAccess.GetLength(handle);
+		var buffer = new byte[length];
+		var memory = new Memory<byte>(buffer);
+		await RandomAccess.ReadAsync(handle, memory, 0, cancellationToken).ConfigureAwait(false);
+		return new GenericBufferReader(memory);
+	}
 
-			if (length == 0)
-			{
-				return string.Empty;
-			}
+	public static GenericBufferReader LoadFromStream(Stream stream)
+	{
+		var buffer = new byte[stream.Length];
+		stream.Read(buffer);
+		return new GenericBufferReader(buffer);
+	}
 
-			// 1 byte/char is removed because of null terminator ('\0')
-			if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
-			{
-				// If length cannot be negated due to integer overflow, Ar is corrupted.
-				if (length == int.MinValue)
-				{
-					throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
-				}
+	public static async ValueTask<GenericBufferReader> LoadFromStreamAsync(Stream stream,
+		CancellationToken cancellationToken = default)
+	{
+		var buffer = new byte[stream.Length];
+		var memory = new Memory<byte>(buffer);
+		await stream.ReadAsync(memory, cancellationToken).ConfigureAwait(false);
+		return new GenericBufferReader(memory);
+	}
 
-				var pLength = -length * sizeof(char);
-				var result = Encoding.Unicode.GetString(_buffer, _position, pLength - sizeof(char));
-				_position += pLength;
-				return result;
-			}
-			else
-			{
-				var result = Encoding.UTF8.GetString(_buffer, _position, length - 1);
-				_position += length;
-				return result;
-			}
-		}
+	public Memory<byte> AsMemory(bool sliceAtPosition = false)
+	{
+		return sliceAtPosition ? _memory.Slice(Position) : _memory;
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string ReadFString(int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadFString();
-		}
+	public Span<byte> AsSpan(bool sliceAtPosition = false)
+	{
+		return sliceAtPosition ? _memory.Span.Slice(Position) : _memory.Span;
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string[] ReadFStringArray()
-		{
-			var length = Read<int>();
-			return ReadFStringArray(length);
-		}
+	protected virtual void Dispose(bool disposing)
+	{
+		if (disposing) { }
+	}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string[] ReadFStringArray(int offset, SeekOrigin origin)
-		{
-			var length = Read<int>(offset, origin);
-			return ReadFStringArray(length);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string[] ReadFStringArray(int length)
-		{
-			var result = new string[length];
-
-			for (var i = 0; i < length; i++)
-			{
-				result[i] = ReadFString();
-			}
-
-			return result;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public string[] ReadFStringArray(int length, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadFStringArray(length);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>() where T : unmanaged
-		{
-			var length = Read<int>();
-			return ReadArray<T>(length);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int offset, SeekOrigin origin) where T : unmanaged
-		{
-			var length = Read<int>(offset, origin);
-			return ReadArray<T>(length);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length) where T : unmanaged
-		{
-			if (length == 0)
-			{
-				return Array.Empty<T>();
-			}
-
-			var size = length * sizeof(T);
-			var result = new T[length];
-			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _buffer[_position], (uint)size);
-			_position += size;
-			return result;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length, int offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged
-		{
-			Seek(offset, origin);
-			return ReadArray<T>(length);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(Func<T> getter)
-		{
-			var length = Read<int>();
-			return ReadArray(length, getter);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(Func<T> getter, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			var length = Read<int>(offset, origin);
-			return ReadArray(length, getter);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(Func<IGenericReader, T> getter)
-		{
-			var length = Read<int>();
-			return ReadArray(length, getter);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(Func<IGenericReader, T> getter, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			var length = Read<int>(offset, origin);
-			return ReadArray(length, getter);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length, Func<T> getter)
-		{
-			if (length == 0)
-			{
-				return Array.Empty<T>();
-			}
-
-			var result = new T[length];
-
-			for (var i = 0; i < length; i++)
-			{
-				result[i] = getter();
-			}
-
-			return result;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length, Func<T> getter, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadArray(length, getter);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter)
-		{
-			if (length == 0)
-			{
-				return Array.Empty<T>();
-			}
-
-			var result = new T[length];
-
-			for (var i = 0; i < length; i++)
-			{
-				result[i] = getter(this);
-			}
-
-			return result;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter, int offset, SeekOrigin origin = SeekOrigin.Current)
-		{
-			Seek(offset, origin);
-			return ReadArray(length, getter);
-		}
-
-		public void Dispose() { }
+	public override void Dispose()
+	{
+		Dispose(true);
+		GC.SuppressFinalize(this);
 	}
 }

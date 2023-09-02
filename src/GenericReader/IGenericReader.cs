@@ -1,43 +1,57 @@
 ﻿using System;
 using System.IO;
+using System.Numerics;
 using System.Text;
 
-namespace GenericReader
+using Microsoft.Win32.SafeHandles;
+
+namespace GenericReader;
+
+public interface IGenericReader : IDisposable
 {
-	public interface IGenericReader : IDisposable
-	{
-		public long Position { get; set; }
-		public int Size { get; }
-		public int Seek(int offset, SeekOrigin origin);
-		public T Read<T>() where T : unmanaged;
-		public T Read<T>(int offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged;
-		public bool ReadBoolean();
-		public bool ReadBoolean(int offset, SeekOrigin origin = SeekOrigin.Current);
-		public byte ReadByte();
-		public byte ReadByte(int offset, SeekOrigin origin = SeekOrigin.Current);
-		public byte[] ReadBytes(int length);
-		public byte[] ReadBytes(int length, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public string ReadString(Encoding enc);
-		public string ReadString(Encoding enc, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public string ReadString(int length, Encoding enc);
-		public string ReadString(int length, Encoding enc, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public string ReadFString();
-		public string ReadFString(int offset, SeekOrigin origin = SeekOrigin.Current);
-		public string[] ReadFStringArray();
-		public string[] ReadFStringArray(int offset, SeekOrigin origin);
-		public string[] ReadFStringArray(int length);
-		public string[] ReadFStringArray(int length, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public T[] ReadArray<T>() where T : unmanaged;
-		public T[] ReadArray<T>(int offset, SeekOrigin origin) where T : unmanaged;
-		public T[] ReadArray<T>(int length) where T : unmanaged;
-		public T[] ReadArray<T>(int length, int offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged;
-		public T[] ReadArray<T>(Func<T> getter);
-		public T[] ReadArray<T>(Func<T> getter, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public T[] ReadArray<T>(Func<IGenericReader, T> getter);
-		public T[] ReadArray<T>(Func<IGenericReader, T> getter, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public T[] ReadArray<T>(int length, Func<T> getter);
-		public T[] ReadArray<T>(int length, Func<T> getter, int offset, SeekOrigin origin = SeekOrigin.Current);
-		public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter);
-		public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter, int offset, SeekOrigin origin = SeekOrigin.Current);
-	}
+	public static GenericBufferReader Create(byte[] buffer, int start, int length) => new(buffer, start, length);
+	public static GenericBufferReader Create(byte[] buffer) => new(buffer);
+	public static GenericBufferReader Create(ReadOnlyMemory<byte> memory) => new(memory);
+	public static GenericBufferReader Create(Memory<byte> memory) => new(memory);
+
+	public static GenericFileReader Create(string filePath) => new(filePath);
+	public static GenericFileReader Create(SafeFileHandle handle) => new(handle);
+
+	public static GenericStreamReader Create(Stream stream) => new(stream);
+
+	int Position { get; set; }
+	long PositionLong { get; set; }
+	TPosition GetPosition<TPosition>() where TPosition : IBinaryInteger<TPosition>;
+	void SetPosition<TPosition>(TPosition position) where TPosition : IBinaryInteger<TPosition>;
+	int Length { get; }
+	long LengthLong { get; }
+	TLength GetLength<TLength>() where TLength : IBinaryInteger<TLength>;
+	int Seek<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	T Read<T>() where T : struct;
+	T Read<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+	bool ReadBoolean();
+	bool ReadBoolean<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	string ReadString(Encoding enc);
+	string ReadString<TOffset>(Encoding enc, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	string ReadString(int length, Encoding enc);
+	string ReadString<TOffset>(int length, Encoding enc, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	string ReadFString();
+	string ReadFString<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	string[] ReadFStringArray();
+	string[] ReadFStringArray<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	string[] ReadFStringArray(int length);
+	string[] ReadFStringArray<TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>() where T : struct;
+	T[] ReadArray<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>(int length) where T : struct;
+	T[] ReadArray<T, TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>(Func<T> getter);
+	T[] ReadArray<T, TOffset>(Func<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>(Func<IGenericReader, T> getter);
+	T[] ReadArray<T, TOffset>(Func<IGenericReader, T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>(int length, Func<T> getter);
+	T[] ReadArray<T, TOffset>(int length, Func<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+	T[] ReadArray<T>(int length, Func<IGenericReader, T> getter);
+	T[] ReadArray<T, TOffset>(int length, Func<IGenericReader, T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
 }
