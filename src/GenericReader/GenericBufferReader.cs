@@ -143,6 +143,22 @@ public class GenericBufferReader : GenericReaderBase
 		}
 	}
 
+	public FStringMemory[] ReadFStringMemoryArray(int length)
+	{
+		var result = new FStringMemory[length];
+
+		for (var i = 0; i < length; i++)
+			result[i] = ReadFStringMemory();
+
+		return result;
+	}
+
+	public FStringMemory[] ReadFStringMemoryArray()
+	{
+		var length = Read<int>();
+		return ReadFStringMemoryArray(length);
+	}
+
 	public override T[] ReadArray<T>(int length) where T : struct
 	{
 		if (length == 0)
