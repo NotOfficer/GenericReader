@@ -7,9 +7,9 @@ public readonly struct FStringMemory
 {
 	public Memory<byte> Memory { get; }
 	public bool IsUnicode { get; }
-	public Span<byte> Span => Memory.Span;
-	public bool IsEmpty => Memory.IsEmpty;
-	public Encoding Encoding => IsUnicode ? Encoding.Unicode : Encoding.UTF8;
+	public Span<byte> GetSpan() => Memory.Span;
+	public bool IsEmpty() => Memory.IsEmpty;
+	public Encoding GetEncoding() => IsUnicode ? Encoding.Unicode : Encoding.UTF8;
 
 	public FStringMemory(Memory<byte> memory, bool isUnicode)
 	{
@@ -17,5 +17,5 @@ public readonly struct FStringMemory
 		IsUnicode = isUnicode;
 	}
 
-	public override string ToString() => Encoding.GetString(Span);
+	public override string ToString() => GetEncoding().GetString(GetSpan());
 }
