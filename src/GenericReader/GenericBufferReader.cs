@@ -116,6 +116,33 @@ public class GenericBufferReader : GenericReaderBase
 		}
 	}
 
+	public FStringMemory ReadFStringMemory()
+	{
+		// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
+		var length = Read<int>();
+		if (length == 0)
+			return default;
+
+		// 1 byte/char is removed because of null terminator ('\0')
+		if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
+		{
+			// If length cannot be negated due to integer overflow, Ar is corrupted.
+			if (length == int.MinValue)
+				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
+
+			var pLength = length * -sizeof(char);
+			var memory = _memory.Slice(Position, pLength - sizeof(char));
+			Position += pLength;
+			return new FStringMemory(memory, true);
+		}
+		else
+		{
+			var memory = _memory.Slice(Position, length - 1);
+			Position += length;
+			return new FStringMemory(memory, false);
+		}
+	}
+
 	public override T[] ReadArray<T>(int length) where T : struct
 	{
 		if (length == 0)
@@ -182,6 +209,19 @@ public class GenericBufferReader : GenericReaderBase
 	public Span<byte> AsSpan(bool sliceAtPosition = false)
 	{
 		return sliceAtPosition ? _memory.Span.Slice(Position) : _memory.Span;
+	}
+
+	public Memory<byte> ReadMemory(int length) => _memory.Slice(Position, length);
+
+	public Span<byte> ReadSpan(int length) => _memory.Span.Slice(Position, length);
+
+	public Span<T> ReadSpan<T>(int length) where T : struct
+	{
+		var size = length * Unsafe.SizeOf<T>();
+		var memorySpan = _memory.Span.Slice(Position, size);
+		ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(memorySpan));
+		var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
+		return resultSpan;
 	}
 
 	protected virtual void Dispose(bool disposing)
