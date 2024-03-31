@@ -2,5 +2,5 @@
 
 internal class Constants
 {
-	public const int MaxStackSize = 1024 * 2;
+	public const int MaxStackSize = 1024;
 }
