@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Buffers;
-using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace GenericReader;
@@ -68,21 +68,43 @@ public class GenericStreamReader : GenericReaderBase
 	public override T Read<T>() where T : struct
 	{
 		var size = Unsafe.SizeOf<T>();
-		var buffer = ArrayPool<byte>.Shared.Rent(size);
-		var bytesRead = _stream.Read(buffer, 0, Length);
-		ThrowIfStreamEnd(bytesRead, size);
-		var result = Unsafe.ReadUnaligned<T>(ref buffer[0]);
-		ArrayPool<byte>.Shared.Return(buffer);
+		T result;
+
+		if (size > Constants.MaxStackSize)
+		{
+			var buffer = ArrayPool<byte>.Shared.Rent(size);
+			_stream.ReadExactly(buffer, 0, size);
+			result = Unsafe.ReadUnaligned<T>(ref buffer[0]);
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
+		else
+		{
+			Span<byte> span = stackalloc byte[size];
+			_stream.ReadExactly(span);
+			result = Unsafe.ReadUnaligned<T>(ref span[0]);
+		}
+
 		return result;
 	}
 
 	public override string ReadString(int length, Encoding enc)
 	{
-		var buffer = ArrayPool<byte>.Shared.Rent(length);
-		var bytesRead = _stream.Read(buffer, 0, length);
-		ThrowIfStreamEnd(bytesRead, length);
-		var result = enc.GetString(new ReadOnlySpan<byte>(buffer, 0, length));
-		ArrayPool<byte>.Shared.Return(buffer);
+		string result;
+
+		if (length > Constants.MaxStackSize)
+		{
+			var buffer = ArrayPool<byte>.Shared.Rent(length);
+			_stream.ReadExactly(buffer, 0, length);
+			result = enc.GetString(new ReadOnlySpan<byte>(buffer, 0, length));
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
+		else
+		{
+			Span<byte> span = stackalloc byte[length];
+			_stream.ReadExactly(span);
+			result = enc.GetString(span);
+		}
+
 		return result;
 	}
 
@@ -120,19 +142,28 @@ public class GenericStreamReader : GenericReaderBase
 
 		var size = length * Unsafe.SizeOf<T>();
 		var result = new T[length];
-		var buffer = ArrayPool<byte>.Shared.Rent(size);
-		var bytesRead = _stream.Read(buffer, 0, size);
-		ThrowIfStreamEnd(bytesRead, size);
-		Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
-		ArrayPool<byte>.Shared.Return(buffer);
+
+		if (size > Constants.MaxStackSize)
+		{
+			var buffer = ArrayPool<byte>.Shared.Rent(size);
+			_stream.ReadExactly(buffer, 0, size);
+			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
+		else
+		{
+			Span<byte> span = stackalloc byte[size];
+			_stream.ReadExactly(span);
+			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref span[0], (uint)size);
+		}
+
 		return result;
 	}
 
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
 		var buffer = useSharedArrayPool ? ArrayPool<byte>.Shared.Rent(length) : new byte[length];
-		var bytesRead = _stream.Read(buffer, 0, length);
-		ThrowIfStreamEnd(bytesRead, length);
+		_stream.ReadExactly(buffer, 0, length);
 		return buffer;
 	}
 
@@ -141,13 +172,6 @@ public class GenericStreamReader : GenericReaderBase
 	{
 		Seek(offset, origin);
 		return ReadBytes(length, useSharedArrayPool);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private void ThrowIfStreamEnd(int bytesRead, int shouldHaveRead)
-	{
-		if (bytesRead != shouldHaveRead)
-			throw new EndOfStreamException($"Could not read {shouldHaveRead} bytes from file at position {PositionLong}");
 	}
 
 	protected virtual void Dispose(bool disposing)
