@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Text;
 
 using Microsoft.Win32.SafeHandles;
@@ -30,6 +28,8 @@ public interface IGenericReader : IDisposable
 	long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
 	T Read<T>() where T : struct;
 	T Read<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+	void Read<T>(Span<T> dest) where T : struct;
+	void Read<T, TOffset>(Span<T> dest, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
 	bool ReadBoolean();
 	bool ReadBoolean<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
 	string ReadString(Encoding enc);

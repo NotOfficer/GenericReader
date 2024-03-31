@@ -87,6 +87,15 @@ public class GenericStreamReader : GenericReaderBase
 		return result;
 	}
 
+	public override void Read<T>(Span<T> dest)
+	{
+		if (dest.IsEmpty)
+			return;
+
+		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length);
+		_stream.ReadExactly(span);
+	}
+
 	public override string ReadString(int length, Encoding enc)
 	{
 		string result;

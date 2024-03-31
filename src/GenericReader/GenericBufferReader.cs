@@ -1,10 +1,6 @@
-﻿using System;
-using System.IO;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 using Microsoft.Win32.SafeHandles;
 
@@ -78,6 +74,13 @@ public class GenericBufferReader : GenericReaderBase
 		var size = Unsafe.SizeOf<T>();
 		Position += size;
 		return result;
+	}
+
+	public override void Read<T>(Span<T> dest)
+	{
+		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length);
+		_memory.Span.Slice(Position, span.Length).CopyTo(span);
+		Position += span.Length;
 	}
 
 	public override string ReadString(int length, Encoding enc)

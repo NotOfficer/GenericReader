@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Text;
 
 namespace GenericReader;
@@ -25,6 +23,15 @@ public abstract class GenericReaderBase : IGenericReader
 		SeekVoid(offset, origin);
 		return Read<T>();
 	}
+
+	public abstract void Read<T>(Span<T> dest) where T : struct;
+	public void Read<T, TOffset>(Span<T> dest, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+		where T : struct where TOffset : IBinaryInteger<TOffset>
+	{
+		SeekVoid(offset, origin);
+		Read(dest);
+	}
+
 	public bool ReadBoolean() => Read<int>() != 0;
 	public bool ReadBoolean<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
 		where TOffset : IBinaryInteger<TOffset>

@@ -1,8 +1,7 @@
-﻿using System;
-using System.Buffers;
-using System.IO;
+﻿using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using Microsoft.Win32.SafeHandles;
@@ -93,6 +92,18 @@ public class GenericFileReader : GenericReaderBase
 
 		PositionLong += size;
 		return result;
+	}
+
+	public override void Read<T>(Span<T> dest)
+	{
+		if (dest.IsEmpty)
+			return;
+
+		var size = dest.Length * Unsafe.SizeOf<T>();
+		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length);
+		var bytesRead = RandomAccess.Read(_handle, span, PositionLong);
+		ThrowIfStreamEnd(bytesRead, size);
+		PositionLong += size;
 	}
 
 	public override string ReadString(int length, Encoding enc)
