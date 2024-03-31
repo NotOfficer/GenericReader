@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <Authors>NotOfficer</Authors>
     <Company>NotOfficer</Company>
     <Description>A generic binary reader for .NET</Description>
-    <Copyright>Copyright (c) 2023 NotOfficer</Copyright>
+    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/NotOfficer/GenericReader</PackageProjectUrl>
     <PackageIcon>icon.png</PackageIcon>

@@ -143,7 +143,7 @@ public abstract class GenericReaderBase : IGenericReader
 	public T[] ReadArray<T>(int length, Func<T> getter)
 	{
 		if (length == 0)
-			return Array.Empty<T>();
+			return [];
 
 		var result = new T[length];
 
@@ -163,7 +163,7 @@ public abstract class GenericReaderBase : IGenericReader
 	public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter)
 	{
 		if (length == 0)
-			return Array.Empty<T>();
+			return [];
 
 		var result = new T[length];
 

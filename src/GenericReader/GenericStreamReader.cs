@@ -116,7 +116,7 @@ public class GenericStreamReader : GenericReaderBase
 	public override T[] ReadArray<T>(int length) where T : struct
 	{
 		if (length == 0)
-			return Array.Empty<T>();
+			return [];
 
 		var size = length * Unsafe.SizeOf<T>();
 		var result = new T[length];
