@@ -78,7 +78,8 @@ public class GenericBufferReader : GenericReaderBase
 
 	public override void Read<T>(Span<T> dest)
 	{
-		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length);
+		var size = Unsafe.SizeOf<T>();
+		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
 		_memory.Span.Slice(Position, span.Length).CopyTo(span);
 		Position += span.Length;
 	}

@@ -92,7 +92,8 @@ public class GenericStreamReader : GenericReaderBase
 		if (dest.IsEmpty)
 			return;
 
-		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length);
+		var size = Unsafe.SizeOf<T>();
+		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
 		_stream.ReadExactly(span);
 	}
 

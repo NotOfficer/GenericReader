@@ -81,6 +81,9 @@ public abstract class GenericReaderBase : IGenericReader
 
 	public string[] ReadFStringArray(int length)
 	{
+		if (length == 0)
+			return [];
+
 		var result = new string[length];
 
 		for (var i = 0; i < length; i++)
