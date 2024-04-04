@@ -1,7 +1,6 @@
 ﻿using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 
 using Microsoft.Win32.SafeHandles;
@@ -10,15 +9,49 @@ namespace GenericReader;
 
 public class GenericFileReader : GenericReaderBase
 {
-	private readonly SafeFileHandle _handle;
+	private const int DefaultBufferSize = 4096;
 
-	public GenericFileReader(string filePath) : this(File.OpenHandle(filePath)) { }
-	public GenericFileReader(SafeFileHandle handle)
+	private readonly SafeFileHandle _handle;
+	private readonly GenericBufferReader _bufferReader;
+
+	private byte[] _buffer;
+	private long _bufferPosition;
+	private long _bufferEndPosition;
+	private int _bufferSize;
+	private int _bufferSizeToAlloc;
+
+	public GenericFileReader(string filePath, int bufferSize = DefaultBufferSize)
+		: this(File.OpenHandle(filePath, options: FileOptions.RandomAccess), bufferSize) { }
+	public GenericFileReader(SafeFileHandle handle, int bufferSize = DefaultBufferSize)
 	{
 		_handle = handle;
 		var fileLength = RandomAccess.GetLength(_handle);
 		LengthLong = fileLength;
 		Length = unchecked((int)fileLength);
+
+		_bufferSizeToAlloc = bufferSize;
+		_bufferPosition = _bufferEndPosition = -1;
+		_bufferReader = new GenericBufferReader(Memory<byte>.Empty);
+	}
+
+	private void EnsureBufferAllocated(int size)
+	{
+		if (size > _bufferSize || PositionLong < _bufferPosition || PositionLong + size > _bufferEndPosition)
+		{
+			_bufferSizeToAlloc = Math.Max(_bufferSizeToAlloc, size);
+			if (_bufferPosition != -1)
+				ArrayPool<byte>.Shared.Return(_buffer);
+			_buffer = ArrayPool<byte>.Shared.Rent(_bufferSizeToAlloc);
+			var bytesRead = RandomAccess.Read(_handle, _buffer, PositionLong);
+			_bufferPosition = PositionLong;
+			_bufferSize = bytesRead;
+			_bufferEndPosition = PositionLong + bytesRead;
+			_bufferReader.SetBufferAndPosition(_buffer, (int)(PositionLong - _bufferPosition));
+		}
+		else
+		{
+			_bufferReader.Position = (int)(PositionLong - _bufferPosition);
+		}
 	}
 
 	public override int Position
@@ -72,60 +105,27 @@ public class GenericFileReader : GenericReaderBase
 	public override T Read<T>() where T : struct
 	{
 		var size = Unsafe.SizeOf<T>();
-		T result;
-
-		if (size > Constants.MaxStackSize)
-		{
-			var buffer = ArrayPool<byte>.Shared.Rent(size);
-			var bytesRead = RandomAccess.Read(_handle, buffer, PositionLong);
-			ThrowIfStreamEnd(bytesRead, size);
-			result = Unsafe.ReadUnaligned<T>(ref buffer[0]);
-			ArrayPool<byte>.Shared.Return(buffer);
-		}
-		else
-		{
-			Span<byte> span = stackalloc byte[size];
-			var bytesRead = RandomAccess.Read(_handle, span, PositionLong);
-			ThrowIfStreamEnd(bytesRead, size);
-			result = Unsafe.ReadUnaligned<T>(ref span[0]);
-		}
-
+		EnsureBufferAllocated(size);
+		var result = _bufferReader.Read<T>();
 		PositionLong += size;
 		return result;
 	}
 
-	public override void Read<T>(Span<T> dest)
+	public override void Read<T>(Span<T> dest) where T : struct
 	{
 		if (dest.IsEmpty)
 			return;
 
-		var size = Unsafe.SizeOf<T>();
-		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
-		var bytesRead = RandomAccess.Read(_handle, span, PositionLong);
-		ThrowIfStreamEnd(bytesRead, span.Length);
-		PositionLong += span.Length;
+		var size = Unsafe.SizeOf<T>() * dest.Length;
+		EnsureBufferAllocated(size);
+		_bufferReader.Read(dest);
+		PositionLong += size;
 	}
 
 	public override string ReadString(int length, Encoding enc)
 	{
-		string result;
-
-		if (length > Constants.MaxStackSize)
-		{
-			var buffer = ArrayPool<byte>.Shared.Rent(length);
-			var bytesRead = RandomAccess.Read(_handle, buffer, PositionLong);
-			ThrowIfStreamEnd(bytesRead, length);
-			result = enc.GetString(new ReadOnlySpan<byte>(buffer, 0, length));
-			ArrayPool<byte>.Shared.Return(buffer);
-		}
-		else
-		{
-			Span<byte> span = stackalloc byte[length];
-			var bytesRead = RandomAccess.Read(_handle, span, PositionLong);
-			ThrowIfStreamEnd(bytesRead, length);
-			result = enc.GetString(span);
-		}
-
+		EnsureBufferAllocated(length);
+		var result = _bufferReader.ReadString(length, enc);
 		PositionLong += length;
 		return result;
 	}
@@ -163,23 +163,8 @@ public class GenericFileReader : GenericReaderBase
 			return [];
 
 		var size = length * Unsafe.SizeOf<T>();
-		var result = new T[length];
-
-		if (size > Constants.MaxStackSize)
-		{
-			var buffer = ArrayPool<byte>.Shared.Rent(size);
-			var bytesRead = RandomAccess.Read(_handle, buffer, PositionLong);
-			ThrowIfStreamEnd(bytesRead, size);
-			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
-			ArrayPool<byte>.Shared.Return(buffer);
-		}
-		else
-		{
-			Span<byte> span = stackalloc byte[size];
-			var bytesRead = RandomAccess.Read(_handle, span, PositionLong);
-			ThrowIfStreamEnd(bytesRead, size);
-			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref span[0], (uint)size);
-		}
+		EnsureBufferAllocated(size);
+		var result = _bufferReader.ReadArray<T>(length);
 
 		PositionLong += size;
 		return result;
@@ -188,8 +173,8 @@ public class GenericFileReader : GenericReaderBase
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
 		var buffer = useSharedArrayPool ? ArrayPool<byte>.Shared.Rent(length) : new byte[length];
-		var bytesRead = RandomAccess.Read(_handle, new Span<byte>(buffer, 0, length), PositionLong);
-		ThrowIfStreamEnd(bytesRead, length);
+		EnsureBufferAllocated(length);
+		_bufferReader.Read(buffer.AsSpan(0, length));
 		PositionLong += length;
 		return buffer;
 	}
@@ -201,16 +186,14 @@ public class GenericFileReader : GenericReaderBase
 		return ReadBytes(length, useSharedArrayPool);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private void ThrowIfStreamEnd(int bytesRead, int shouldHaveRead)
-	{
-		if (bytesRead != shouldHaveRead)
-			throw new EndOfStreamException($"Could not read {shouldHaveRead} bytes from file at position {PositionLong}");
-	}
-
 	protected virtual void Dispose(bool disposing)
 	{
-		if (disposing) _handle?.Dispose();
+		if (disposing)
+		{
+			if (_bufferPosition != -1)
+				ArrayPool<byte>.Shared.Return(_buffer);
+			_handle?.Dispose();
+		}
 	}
 
 	public override void Dispose()

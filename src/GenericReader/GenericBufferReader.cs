@@ -8,7 +8,7 @@ namespace GenericReader;
 
 public class GenericBufferReader : GenericReaderBase
 {
-	private readonly Memory<byte> _memory;
+	private Memory<byte> _memory;
 
 	public GenericBufferReader(byte[] buffer, int start, int length) : this(new Memory<byte>(buffer, start, length)) { }
 	public GenericBufferReader(byte[] buffer) : this(new Memory<byte>(buffer)) { }
@@ -17,6 +17,12 @@ public class GenericBufferReader : GenericReaderBase
 	{
 		_memory = memory;
 		LengthLong = Length = memory.Length;
+	}
+
+	internal void SetBufferAndPosition(byte[] buffer, int position)
+	{
+		Position = position;
+		_memory = buffer;
 	}
 
 	public override int Position { get; set; }
@@ -76,7 +82,7 @@ public class GenericBufferReader : GenericReaderBase
 		return result;
 	}
 
-	public override void Read<T>(Span<T> dest)
+	public override void Read<T>(Span<T> dest) where T : struct
 	{
 		var size = Unsafe.SizeOf<T>();
 		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);

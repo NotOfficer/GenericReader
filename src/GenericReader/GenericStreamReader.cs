@@ -1,5 +1,4 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -87,7 +86,7 @@ public class GenericStreamReader : GenericReaderBase
 		return result;
 	}
 
-	public override void Read<T>(Span<T> dest)
+	public override void Read<T>(Span<T> dest) where T : struct
 	{
 		if (dest.IsEmpty)
 			return;
