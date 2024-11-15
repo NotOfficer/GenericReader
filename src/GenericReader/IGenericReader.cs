@@ -12,6 +12,11 @@ public interface IGenericReader : IDisposable
 	public static GenericBufferReader Create(ReadOnlyMemory<byte> memory) => new(memory);
 	public static GenericBufferReader Create(Memory<byte> memory) => new(memory);
 
+#if NET9_0_OR_GREATER
+	public static GenericSpanReader Create(ReadOnlySpan<byte> span) => new(span);
+	public static GenericSpanReader Create(Span<byte> span) => new(span);
+#endif
+
 	public static GenericFileReader Create(string filePath) => new(filePath);
 	public static GenericFileReader Create(SafeFileHandle handle) => new(handle);
 
