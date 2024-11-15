@@ -138,7 +138,7 @@ public class GenericStreamReader : GenericReaderBase
 		}
 		else
 		{
-			var result = ReadString(length - 1 - sizeof(char), Encoding.UTF8);
+			var result = ReadString(length - 1, Encoding.UTF8);
 			PositionLong += 1;
 			return result;
 		}
