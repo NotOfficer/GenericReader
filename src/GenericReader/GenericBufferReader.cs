@@ -214,7 +214,7 @@ public class GenericBufferReader : GenericReaderBase
 	public static GenericBufferReader LoadFromStream(Stream stream)
 	{
 		var buffer = new byte[stream.Length];
-		stream.Read(buffer);
+		stream.ReadExactly(buffer);
 		return new GenericBufferReader(buffer);
 	}
 
