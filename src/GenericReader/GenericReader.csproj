@@ -9,21 +9,18 @@
     <Description>A generic binary reader for .NET</Description>
     <PackageTags>generic reader, binary reader</PackageTags>
     <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <PackageIcon>icon.png</PackageIcon>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <AssemblyVersion>2.1.2.0</AssemblyVersion>
     <FileVersion>2.1.2.0</FileVersion>
     <Version>2.1.2</Version>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
-  </ItemGroup>
-
   <PropertyGroup>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -32,5 +29,9 @@
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
 
 </Project>
