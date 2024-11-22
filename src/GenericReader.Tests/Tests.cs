@@ -5,6 +5,7 @@ using System.Text;
 
 namespace GenericReader.Tests;
 
+#if NET9_0_OR_GREATER
 public class SpanReaderTests : IClassFixture<BinaryDataGenerator<GenericSpanReader>>
 {
 	private readonly BinaryDataGenerator<GenericSpanReader> _gen;
@@ -21,6 +22,7 @@ public class SpanReaderTests : IClassFixture<BinaryDataGenerator<GenericSpanRead
 		_gen.Test(ref reader);
 	}
 }
+#endif
 
 public class BufferReaderTests : IClassFixture<BinaryDataGenerator<GenericBufferReader>>
 {
@@ -89,7 +91,10 @@ public class FileReaderTests : IClassFixture<BinaryDataGenerator<GenericFileRead
 	}
 }
 
-public class BinaryDataGenerator<TReader> where TReader : IGenericReader, allows ref struct
+public class BinaryDataGenerator<TReader> where TReader : IGenericReader
+#if NET9_0_OR_GREATER
+	, allows ref struct
+#endif
 {
 	public byte[] Data { get; }
 
@@ -124,7 +129,10 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader, allows
 	}
 }
 
-public class BinaryDataValues<TReader> where TReader : IGenericReader, allows ref struct
+public class BinaryDataValues<TReader> where TReader : IGenericReader
+#if NET9_0_OR_GREATER
+	, allows ref struct
+#endif
 {
 	public delegate bool VerifyFunc(ref TReader reader);
 
