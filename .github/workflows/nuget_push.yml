@@ -12,8 +12,8 @@ defaults:
 
 jobs:
   build:
+    if: ${{ github.event.head_commit.message =~ '^v[0-9]+(\.[0-9]+)*$' }}
     runs-on: ubuntu-latest
-    if: github.event.head_commit.message matches '^v[0-9]+(\.[0-9]+)*$'
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
