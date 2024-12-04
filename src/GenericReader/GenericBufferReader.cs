@@ -92,7 +92,15 @@ public class GenericBufferReader : GenericReaderBase
 
 	public override string ReadString(int length, Encoding enc)
 	{
-		var result = enc.GetString(_memory.Span.Slice(Position, length));
+		return ReadString(length, enc, false);
+	}
+
+	internal string ReadString(int length, Encoding enc, bool trimNull)
+	{
+		var span = _memory.Span.Slice(Position, length);
+		if (trimNull)
+			span = span.TrimEnd(byte.MinValue);
+		var result = enc.GetString(span);
 		Position += length;
 		return result;
 	}
@@ -119,7 +127,7 @@ public class GenericBufferReader : GenericReaderBase
 		}
 		else
 		{
-			var span = _memory.Span.Slice(Position, length - 1);
+			var span = _memory.Span.Slice(Position, length).TrimEnd(byte.MinValue);
 			var result = Encoding.UTF8.GetString(span);
 			Position += length;
 			return result;
@@ -147,7 +155,7 @@ public class GenericBufferReader : GenericReaderBase
 		}
 		else
 		{
-			var memory = _memory.Slice(Position, length - 1);
+			var memory = _memory.Slice(Position, length).TrimEnd(byte.MinValue);
 			Position += length;
 			return new FStringMemory(memory, false);
 		}

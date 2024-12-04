@@ -160,7 +160,7 @@ public ref struct GenericSpanReader : IGenericReader
 		}
 		else
 		{
-			var span = _span.Slice(Position, length - 1);
+			var span = _span.Slice(Position, length).TrimEnd(byte.MinValue);
 			var result = Encoding.UTF8.GetString(span);
 			Position += length;
 			return result;

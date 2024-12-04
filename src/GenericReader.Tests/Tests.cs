@@ -169,13 +169,33 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 		AddString(Encoding.ASCII, Helpers.GetString());
 		AddString(Encoding.ASCII, Helpers.GetString(128));
 		AddFString(false, string.Empty);
+		AddFString(false, string.Empty, nullTerminated: false);
 		AddFString(false, Helpers.GetString());
+		AddFString(false, Helpers.GetString(), nullTerminated: false);
 		AddFString(false, Helpers.GetString(128));
+		AddFString(false, Helpers.GetString(128), nullTerminated: false);
+		AddFString(true, string.Empty);
 		AddFString(true, Helpers.GetString());
 		AddFString(true, Helpers.GetString(128));
-		for (var i = 0; i < 10; i++)
+		for (var i = 0; i < 32; i++)
 		{
+			Add<sbyte>();
+			Add<byte>();
+			Add<short>();
+			Add<ushort>();
+			Add<int>();
+			Add<uint>();
+			Add<long>();
+			Add<ulong>();
+			Add<nint>();
+			Add<nuint>();
+			Add<Int128>();
+			Add<UInt128>();
+			Add<float>();
+			Add<double>();
+			Add<decimal>();
 			AddFString(false);
+			AddFString(false, nullTerminated: false);
 			AddFString(true);
 			AddString(Encoding.UTF8);
 			AddString(Encoding.ASCII);
@@ -219,7 +239,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 		});
 	}
 
-	private void AddFString(bool unicode, string? value = null)
+	private void AddFString(bool unicode, string? value = null, bool nullTerminated = true)
 	{
 		value ??= Helpers.GetName();
 		Values.Add(value);
@@ -234,9 +254,10 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 			var numBytes = encoding.GetMaxByteCount(value.Length);
 			Span<byte> bytes = stackalloc byte[numBytes];
 			var written = encoding.GetBytes(value, bytes);
-			writer.Write(unicode ? -(value.Length + 1) : written + 1);
+			writer.Write(unicode ? -(value.Length + 1) : written + (nullTerminated ? 1 : 0));
 			writer.Write(bytes.Slice(0, written));
-			for (var i = 0; i < (unicode ? 2 : 1); i++)
+			if (!nullTerminated) return;
+			for (var i = 0; i < (unicode ? sizeof(char) : sizeof(byte)); i++)
 				writer.Write(byte.MinValue);
 		});
 	}

@@ -124,8 +124,13 @@ public class GenericFileReader : GenericReaderBase
 
 	public override string ReadString(int length, Encoding enc)
 	{
+		return ReadString(length, enc, false);
+	}
+
+	private string ReadString(int length, Encoding enc, bool trimNull)
+	{
 		EnsureBufferAllocated(length);
-		var result = _bufferReader.ReadString(length, enc);
+		var result = _bufferReader.ReadString(length, enc, trimNull);
 		PositionLong += length;
 		return result;
 	}
@@ -145,14 +150,13 @@ public class GenericFileReader : GenericReaderBase
 				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
 			var pLength = length * -sizeof(char);
-			var result = ReadString(pLength - sizeof(char), Encoding.Unicode);
+			var result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
 			PositionLong += sizeof(char);
 			return result;
 		}
 		else
 		{
-			var result = ReadString(length - 1, Encoding.UTF8);
-			PositionLong += 1;
+			var result = ReadString(length, Encoding.UTF8, true);
 			return result;
 		}
 	}

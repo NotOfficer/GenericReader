@@ -98,19 +98,29 @@ public class GenericStreamReader : GenericReaderBase
 
 	public override string ReadString(int length, Encoding enc)
 	{
+		return ReadString(length, enc, false);
+	}
+
+	private string ReadString(int length, Encoding enc, bool trimNull)
+	{
 		string result;
 
 		if (length > Constants.MaxStackSize)
 		{
 			var buffer = ArrayPool<byte>.Shared.Rent(length);
-			_stream.ReadExactly(buffer, 0, length);
-			result = enc.GetString(new ReadOnlySpan<byte>(buffer, 0, length));
+			var span = new Span<byte>(buffer, 0, length);
+			_stream.ReadExactly(span);
+			if (trimNull)
+				span = span.TrimEnd(byte.MinValue);
+			result = enc.GetString(span);
 			ArrayPool<byte>.Shared.Return(buffer);
 		}
 		else
 		{
 			Span<byte> span = stackalloc byte[length];
 			_stream.ReadExactly(span);
+			if (trimNull)
+				span = span.TrimEnd(byte.MinValue);
 			result = enc.GetString(span);
 		}
 
@@ -132,14 +142,13 @@ public class GenericStreamReader : GenericReaderBase
 				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
 			var pLength = length * -sizeof(char);
-			var result = ReadString(pLength - sizeof(char), Encoding.Unicode);
+			var result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
 			PositionLong += sizeof(char);
 			return result;
 		}
 		else
 		{
-			var result = ReadString(length - 1, Encoding.UTF8);
-			PositionLong += 1;
+			var result = ReadString(length, Encoding.UTF8, true);
 			return result;
 		}
 	}

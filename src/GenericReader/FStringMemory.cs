@@ -6,6 +6,7 @@ public readonly struct FStringMemory
 {
 	public Memory<byte> Memory { get; }
 	public bool IsUnicode { get; }
+
 	public Span<byte> GetSpan() => Memory.Span;
 	public bool IsEmpty() => Memory.IsEmpty;
 	public Encoding GetEncoding() => IsUnicode ? Encoding.Unicode : Encoding.UTF8;
