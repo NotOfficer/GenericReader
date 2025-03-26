@@ -245,6 +245,12 @@ public class GenericBufferReader : GenericReaderBase
 		return sliceAtPosition ? _memory.Span.Slice(Position) : _memory.Span;
 	}
 
+	public Memory<byte> ReadMemory()
+	{
+		var length = Read<int>();
+		return ReadMemory(length);
+	}
+
 	public Memory<byte> ReadMemory(int length)
 	{
 		var result = _memory.Slice(Position, length);
@@ -252,11 +258,23 @@ public class GenericBufferReader : GenericReaderBase
 		return result;
 	}
 
+	public Span<byte> ReadSpan()
+	{
+		var length = Read<int>();
+		return ReadSpan(length);
+	}
+
 	public Span<byte> ReadSpan(int length)
 	{
 		var result = _memory.Span.Slice(Position, length);
 		Position += length;
 		return result;
+	}
+
+	public Span<T> ReadSpan<T>() where T : struct
+	{
+		var length = Read<int>();
+		return ReadSpan<T>(length);
 	}
 
 	public Span<T> ReadSpan<T>(int length) where T : struct
