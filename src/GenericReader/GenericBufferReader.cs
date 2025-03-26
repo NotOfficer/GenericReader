@@ -245,9 +245,19 @@ public class GenericBufferReader : GenericReaderBase
 		return sliceAtPosition ? _memory.Span.Slice(Position) : _memory.Span;
 	}
 
-	public Memory<byte> ReadMemory(int length) => _memory.Slice(Position, length);
+	public Memory<byte> ReadMemory(int length)
+	{
+		var result = _memory.Slice(Position, length);
+		Position += length;
+		return result;
+	}
 
-	public Span<byte> ReadSpan(int length) => _memory.Span.Slice(Position, length);
+	public Span<byte> ReadSpan(int length)
+	{
+		var result = _memory.Span.Slice(Position, length);
+		Position += length;
+		return result;
+	}
 
 	public Span<T> ReadSpan<T>(int length) where T : struct
 	{
@@ -255,6 +265,7 @@ public class GenericBufferReader : GenericReaderBase
 		var memorySpan = _memory.Span.Slice(Position, size);
 		ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(memorySpan));
 		var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
+		Position += size;
 		return resultSpan;
 	}
 

@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using System.Text;
 
 namespace GenericReader;
@@ -32,7 +33,12 @@ public abstract class GenericReaderBase : IGenericReader
 		Read(dest);
 	}
 
-	public bool ReadBoolean() => Read<int>() != 0;
+	public bool ReadBoolean()
+	{
+		var num = Read<uint>();
+		Debug.Assert(num is 0 or 1);
+		return num != 0;
+	}
 	public bool ReadBoolean<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
 		where TOffset : IBinaryInteger<TOffset>
 	{
