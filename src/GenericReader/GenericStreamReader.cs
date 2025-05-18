@@ -159,7 +159,7 @@ public class GenericStreamReader : GenericReaderBase
 			return [];
 
 		var size = length * Unsafe.SizeOf<T>();
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		if (size > Constants.MaxStackSize)
 		{
@@ -180,7 +180,9 @@ public class GenericStreamReader : GenericReaderBase
 
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
-		var buffer = useSharedArrayPool ? ArrayPool<byte>.Shared.Rent(length) : new byte[length];
+		var buffer = useSharedArrayPool
+			? ArrayPool<byte>.Shared.Rent(length)
+			: GC.AllocateUninitializedArray<byte>(length);
 		_stream.ReadExactly(buffer, 0, length);
 		return buffer;
 	}

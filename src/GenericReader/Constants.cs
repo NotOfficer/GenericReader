@@ -1,6 +1,6 @@
 ﻿namespace GenericReader;
 
-internal class Constants
+internal static class Constants
 {
 	public const int MaxStackSize = 1024;
 }

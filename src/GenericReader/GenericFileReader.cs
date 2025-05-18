@@ -46,7 +46,7 @@ public class GenericFileReader : GenericReaderBase
 			_bufferPosition = PositionLong;
 			_bufferSize = bytesRead;
 			_bufferEndPosition = PositionLong + bytesRead;
-			_bufferReader.SetBufferAndPosition(_buffer, (int)(PositionLong - _bufferPosition));
+			_bufferReader.SetMemoryAndPosition(_buffer, (int)(PositionLong - _bufferPosition));
 		}
 		else
 		{
@@ -176,7 +176,9 @@ public class GenericFileReader : GenericReaderBase
 
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
-		var buffer = useSharedArrayPool ? ArrayPool<byte>.Shared.Rent(length) : new byte[length];
+		var buffer = useSharedArrayPool
+			? ArrayPool<byte>.Shared.Rent(length)
+			: GC.AllocateUninitializedArray<byte>(length);
 		EnsureBufferAllocated(length);
 		_bufferReader.Read(buffer.AsSpan(0, length));
 		PositionLong += length;

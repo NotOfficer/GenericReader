@@ -19,7 +19,7 @@ public class GenericBufferReader : GenericReaderBase
 		LengthLong = Length = memory.Length;
 	}
 
-	internal void SetBufferAndPosition(byte[] buffer, int position)
+	internal void SetMemoryAndPosition(byte[] buffer, int position)
 	{
 		Position = position;
 		_memory = buffer;
@@ -163,7 +163,7 @@ public class GenericBufferReader : GenericReaderBase
 
 	public FStringMemory[] ReadFStringMemoryArray(int length)
 	{
-		var result = new FStringMemory[length];
+		var result = GC.AllocateUninitializedArray<FStringMemory>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = ReadFStringMemory();
@@ -183,7 +183,7 @@ public class GenericBufferReader : GenericReaderBase
 			return [];
 
 		var size = length * Unsafe.SizeOf<T>();
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 		Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _memory.Span[Position], (uint)size);
 		Position += size;
 		return result;
@@ -231,7 +231,7 @@ public class GenericBufferReader : GenericReaderBase
 	{
 		var buffer = new byte[stream.Length];
 		var memory = new Memory<byte>(buffer);
-		await stream.ReadAsync(memory, cancellationToken).ConfigureAwait(false);
+		await stream.ReadExactlyAsync(memory, cancellationToken).ConfigureAwait(false);
 		return new GenericBufferReader(memory);
 	}
 

@@ -192,7 +192,7 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new string[length];
+		var result = GC.AllocateUninitializedArray<string>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = ReadFString();
@@ -270,7 +270,7 @@ public ref struct GenericSpanReader : IGenericReader
 			return [];
 
 		var size = length * Unsafe.SizeOf<T>();
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 		Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _span[Position], (uint)size);
 		Position += size;
 		return result;
@@ -335,7 +335,7 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = getter();
@@ -356,7 +356,7 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		/*for (var i = 0; i < length; i++)
 			result[i] = getter(this);*/
@@ -369,7 +369,7 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = getter(ref this);

@@ -90,7 +90,7 @@ public abstract class GenericReaderBase : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new string[length];
+		var result = GC.AllocateUninitializedArray<string>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = ReadFString();
@@ -161,7 +161,7 @@ public abstract class GenericReaderBase : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = getter();
@@ -181,7 +181,7 @@ public abstract class GenericReaderBase : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = new T[length];
+		var result = GC.AllocateUninitializedArray<T>(length);
 
 		for (var i = 0; i < length; i++)
 			result[i] = getter(this);
