@@ -1,4 +1,4 @@
-# Marlon's .editorconfig v1.0 17/05/2025
+# Marlon's .editorconfig v1.0 18/05/2025
 # Remove the line below if you want to inherit .editorconfig settings from higher directories
 root = true
 
@@ -16,10 +16,6 @@ trim_trailing_whitespace = true
 [*.cs]
 
 #### Core EditorConfig Options ####
-
-# Indentation and spacing
-indent_size = 4
-indent_style = tab
 
 # New line preferences
 end_of_line = crlf
