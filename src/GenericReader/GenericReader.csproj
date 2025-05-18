@@ -1,16 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-
-    <NeutralLanguage>en</NeutralLanguage>
-    <Authors>NotOfficer</Authors>
     <Description>A generic binary reader for .NET</Description>
-    <PackageTags>generic reader, binary reader</PackageTags>
-    <Copyright>Copyright (c) 2024 NotOfficer</Copyright>
-    <AssemblyVersion>2.2.3.0</AssemblyVersion>
-    <FileVersion>2.2.3.0</FileVersion>
+    <PackageTags>generic, binary, reader</PackageTags>
     <Version>2.2.3</Version>
   </PropertyGroup>
 
@@ -24,10 +16,6 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
