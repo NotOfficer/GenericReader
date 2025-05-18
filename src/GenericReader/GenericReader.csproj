@@ -3,12 +3,13 @@
   <PropertyGroup>
     <Description>A generic binary reader for .NET</Description>
     <PackageTags>generic, binary, reader</PackageTags>
-    <Version>2.2.3</Version>
+    <Version>2.2.4</Version>
   </PropertyGroup>
 
   <PropertyGroup>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -19,6 +20,7 @@
 
   <ItemGroup>
     <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="true" />
   </ItemGroup>
 
 </Project>
