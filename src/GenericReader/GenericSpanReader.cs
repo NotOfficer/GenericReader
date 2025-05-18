@@ -411,14 +411,32 @@ public ref struct GenericSpanReader : IGenericReader
 		return sliceAtPosition ? _span.Slice(Position) : _span;
 	}
 
-	public Span<byte> ReadSpan(int length) => _span.Slice(Position, length);
+	public Span<byte> ReadSpan()
+	{
+		var length = Read<int>();
+		return ReadSpan(length);
+	}
+
+	public Span<byte> ReadSpan(int length)
+	{
+		var result = _span.Slice(Position, length);
+		Position += length;
+		return result;
+	}
+
+	public Span<T> ReadSpan<T>() where T : struct
+	{
+		var length = Read<int>();
+		return ReadSpan<T>(length);
+	}
 
 	public Span<T> ReadSpan<T>(int length) where T : struct
 	{
 		var size = length * Unsafe.SizeOf<T>();
-		var memorySpan = _span.Slice(Position, size);
-		ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(memorySpan));
+		var span = _span.Slice(Position, size);
+		ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
+		Position += size;
 		return resultSpan;
 	}
 
