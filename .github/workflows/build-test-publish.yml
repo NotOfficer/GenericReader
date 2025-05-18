@@ -24,11 +24,21 @@ jobs:
             8.0.x
             9.0.x
 
+      - name: Decrypt signing key
+        run: |
+          openssl aes-256-cbc -d -pbkdf2 \
+            -in key_private.snk.enc \
+            -out key_private.snk \
+            -pass pass:${{ secrets.STRONG_NAME_PASSWORD }}
+
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build
-        run: dotnet build -c Release --no-restore
+      - name: Build and sign (trusted release)
+        run: dotnet build -c Release --no-restore \
+          /p:SignAssembly=true \
+          /p:PublicSign=false \
+          /p:AssemblyOriginatorKeyFile=key_private.snk
 
       - name: Run Tests
         run: dotnet test -c Release --no-restore --no-build -v normal
@@ -43,4 +53,7 @@ jobs:
           path: ~/nuget-packages
 
       - name: Push NuGet Package(s)
-        run: dotnet nuget push ~/nuget-packages/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+        run: dotnet nuget push ~/nuget-packages/*.nupkg \
+          --source https://api.nuget.org/v3/index.json \
+          --api-key ${{ secrets.NUGET_API_KEY }} \
+          --skip-duplicate
