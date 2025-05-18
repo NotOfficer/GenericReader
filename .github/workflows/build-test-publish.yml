@@ -1,17 +1,19 @@
-name: NuGet Push
+name: Build, Test, Publish
 
 on:
-  workflow_run:
-    workflows: [Tests]
-    types:
-      - completed
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 defaults:
   run:
     working-directory: src
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +24,17 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Build & Pack NuGet Package(s)
-        run: dotnet pack -c Release --output ~/nuget-packages
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Run Tests
+        run: dotnet test -c Release --no-restore --no-build -v normal
+
+      - name: Pack NuGet Package(s)
+        run: dotnet pack -c Release --no-restore --no-build --output ~/nuget-packages
 
       - name: Upload Build Artifact(s)
         uses: actions/upload-artifact@v4
