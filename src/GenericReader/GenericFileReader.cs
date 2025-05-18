@@ -24,6 +24,7 @@ public class GenericFileReader : GenericReaderBase
 		: this(File.OpenHandle(filePath, options: FileOptions.RandomAccess), bufferSize) { }
 	public GenericFileReader(SafeFileHandle handle, int bufferSize = DefaultBufferSize)
 	{
+		_buffer = [];
 		_handle = handle;
 		var fileLength = RandomAccess.GetLength(_handle);
 		LengthLong = fileLength;
@@ -198,7 +199,7 @@ public class GenericFileReader : GenericReaderBase
 		{
 			if (_bufferPosition != -1)
 				ArrayPool<byte>.Shared.Return(_buffer);
-			_handle?.Dispose();
+			_handle.Dispose();
 		}
 	}
 
