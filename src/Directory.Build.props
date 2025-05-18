@@ -7,7 +7,16 @@
     <Copyright>Copyright (c) 2025 NotOfficer</Copyright>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' != 'true'">
+    <SignAssembly>true</SignAssembly>
+    <PublicSign>true</PublicSign>
+    <AssemblyOriginatorKeyFile>..\key_public.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <SignAssembly>true</SignAssembly>
+    <PublicSign>false</PublicSign>
+    <AssemblyOriginatorKeyFile>..\key_private.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 </Project>

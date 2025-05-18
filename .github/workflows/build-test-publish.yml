@@ -13,7 +13,7 @@ defaults:
     working-directory: src
 
 jobs:
-  build-and-test:
+  build-test-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,21 +24,19 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Decrypt signing key
+      - name: Decrypt signing key and delete public key
         run: |
           openssl aes-256-cbc -d -pbkdf2 \
             -in key_private.snk.enc \
             -out key_private.snk \
             -pass pass:${{ secrets.STRONG_NAME_PASSWORD }}
+          rm -f key_public.snk
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build and sign (trusted release)
-        run: dotnet build -c Release --no-restore \
-          /p:SignAssembly=true \
-          /p:PublicSign=false \
-          /p:AssemblyOriginatorKeyFile=key_private.snk
+      - name: Build
+        run: dotnet build -c Release --no-restore
 
       - name: Run Tests
         run: dotnet test -c Release --no-restore --no-build -v normal
