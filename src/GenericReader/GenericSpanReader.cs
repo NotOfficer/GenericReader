@@ -76,7 +76,7 @@ public ref struct GenericSpanReader : IGenericReader
 	public T Read<T>() where T : struct
 	{
 		var result = Unsafe.ReadUnaligned<T>(ref _span[Position]);
-		var size = Unsafe.SizeOf<T>();
+		int size = Unsafe.SizeOf<T>();
 		Position += size;
 		return result;
 	}
@@ -90,7 +90,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public void Read<T>(Span<T> dest) where T : struct
 	{
-		var size = Unsafe.SizeOf<T>();
+		int size = Unsafe.SizeOf<T>();
 		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
 		_span.Slice(Position, span.Length).CopyTo(span);
 		Position += span.Length;
@@ -113,7 +113,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public string ReadString(Encoding enc)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadString(length, enc);
 	}
 
@@ -133,7 +133,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public string ReadString(int length, Encoding enc)
 	{
-		var result = enc.GetString(_span.Slice(Position, length));
+		string result = enc.GetString(_span.Slice(Position, length));
 		Position += length;
 		return result;
 	}
@@ -141,7 +141,7 @@ public ref struct GenericSpanReader : IGenericReader
 	public string ReadFString()
 	{
 		// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
-		var length = Read<int>();
+		int length = Read<int>();
 		if (length == 0)
 			return string.Empty;
 
@@ -152,16 +152,16 @@ public ref struct GenericSpanReader : IGenericReader
 			if (length == int.MinValue)
 				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
-			var pLength = length * -sizeof(char);
+			int pLength = length * -sizeof(char);
 			var span = _span.Slice(Position, pLength - sizeof(char));
-			var result = Encoding.Unicode.GetString(span);
+			string result = Encoding.Unicode.GetString(span);
 			Position += pLength;
 			return result;
 		}
 		else
 		{
 			var span = _span.Slice(Position, length).TrimEnd(byte.MinValue);
-			var result = Encoding.UTF8.GetString(span);
+			string result = Encoding.UTF8.GetString(span);
 			Position += length;
 			return result;
 		}
@@ -176,7 +176,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public string[] ReadFStringArray()
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadFStringArray(length);
 	}
 
@@ -192,9 +192,9 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = GC.AllocateUninitializedArray<string>(length);
+		string[] result = GC.AllocateUninitializedArray<string>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = ReadFString();
 
 		return result;
@@ -252,7 +252,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public T[] ReadArray<T>() where T : struct
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray<T>(length);
 	}
 
@@ -269,7 +269,7 @@ public ref struct GenericSpanReader : IGenericReader
 		if (length == 0)
 			return [];
 
-		var size = length * Unsafe.SizeOf<T>();
+		int size = length * Unsafe.SizeOf<T>();
 		var result = GC.AllocateUninitializedArray<T>(length);
 		Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _span[Position], (uint)size);
 		Position += size;
@@ -286,7 +286,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public T[] ReadArray<T>(Func<T> getter)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -294,20 +294,20 @@ public ref struct GenericSpanReader : IGenericReader
 		where TOffset : IBinaryInteger<TOffset>
 	{
 		SeekVoid(offset, origin);
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 	
 	[Obsolete(ObsoleteMessage, true)]
 	public T[] ReadArray<T>(Func<IGenericReader, T> getter)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
 	public T[] ReadArray<T>(GetterFunc<T> getter)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 	
@@ -317,7 +317,7 @@ public ref struct GenericSpanReader : IGenericReader
 		where TOffset : IBinaryInteger<TOffset>
 	{
 		SeekVoid(offset, origin);
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -326,7 +326,7 @@ public ref struct GenericSpanReader : IGenericReader
 		where TOffset : IBinaryInteger<TOffset>
 	{
 		SeekVoid(offset, origin);
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -337,7 +337,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 		var result = GC.AllocateUninitializedArray<T>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = getter();
 
 		return result;
@@ -371,7 +371,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 		var result = GC.AllocateUninitializedArray<T>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = getter(ref this);
 
 		return result;
@@ -396,13 +396,13 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public GenericSpanReader Slice(int start, bool sliceAtPosition = false)
 	{
-		var sliceStart = sliceAtPosition ? start + Position : start;
+		int sliceStart = sliceAtPosition ? start + Position : start;
 		return new GenericSpanReader(_span.Slice(sliceStart));
 	}
 
 	public GenericSpanReader Slice(int start, int length, bool sliceAtPosition = false)
 	{
-		var sliceStart = sliceAtPosition ? start + Position : start;
+		int sliceStart = sliceAtPosition ? start + Position : start;
 		return new GenericSpanReader(_span.Slice(sliceStart, length));
 	}
 
@@ -413,7 +413,7 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public Span<byte> ReadSpan()
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadSpan(length);
 	}
 
@@ -426,13 +426,13 @@ public ref struct GenericSpanReader : IGenericReader
 
 	public Span<T> ReadSpan<T>() where T : struct
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadSpan<T>(length);
 	}
 
 	public Span<T> ReadSpan<T>(int length) where T : struct
 	{
-		var size = length * Unsafe.SizeOf<T>();
+		int size = length * Unsafe.SizeOf<T>();
 		var span = _span.Slice(Position, size);
 		ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);

@@ -26,7 +26,7 @@ public class GenericFileReader : GenericReaderBase
 	{
 		_buffer = [];
 		_handle = handle;
-		var fileLength = RandomAccess.GetLength(_handle);
+		long fileLength = RandomAccess.GetLength(_handle);
 		LengthLong = fileLength;
 		Length = unchecked((int)fileLength);
 
@@ -43,7 +43,7 @@ public class GenericFileReader : GenericReaderBase
 			if (_bufferPosition != -1)
 				ArrayPool<byte>.Shared.Return(_buffer);
 			_buffer = ArrayPool<byte>.Shared.Rent(_bufferSizeToAlloc);
-			var bytesRead = RandomAccess.Read(_handle, _buffer, PositionLong);
+			int bytesRead = RandomAccess.Read(_handle, _buffer, PositionLong);
 			_bufferPosition = PositionLong;
 			_bufferSize = bytesRead;
 			_bufferEndPosition = PositionLong + bytesRead;
@@ -105,7 +105,7 @@ public class GenericFileReader : GenericReaderBase
 
 	public override T Read<T>() where T : struct
 	{
-		var size = Unsafe.SizeOf<T>();
+		int size = Unsafe.SizeOf<T>();
 		EnsureBufferAllocated(size);
 		var result = _bufferReader.Read<T>();
 		PositionLong += size;
@@ -117,7 +117,7 @@ public class GenericFileReader : GenericReaderBase
 		if (dest.IsEmpty)
 			return;
 
-		var size = Unsafe.SizeOf<T>() * dest.Length;
+		int size = Unsafe.SizeOf<T>() * dest.Length;
 		EnsureBufferAllocated(size);
 		_bufferReader.Read(dest);
 		PositionLong += size;
@@ -131,7 +131,7 @@ public class GenericFileReader : GenericReaderBase
 	private string ReadString(int length, Encoding enc, bool trimNull)
 	{
 		EnsureBufferAllocated(length);
-		var result = _bufferReader.ReadString(length, enc, trimNull);
+		string result = _bufferReader.ReadString(length, enc, trimNull);
 		PositionLong += length;
 		return result;
 	}
@@ -139,7 +139,7 @@ public class GenericFileReader : GenericReaderBase
 	public override string ReadFString()
 	{
 		// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
-		var length = Read<int>();
+		int length = Read<int>();
 		if (length == 0)
 			return string.Empty;
 
@@ -150,14 +150,14 @@ public class GenericFileReader : GenericReaderBase
 			if (length == int.MinValue)
 				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
-			var pLength = length * -sizeof(char);
-			var result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
+			int pLength = length * -sizeof(char);
+			string result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
 			PositionLong += sizeof(char);
 			return result;
 		}
 		else
 		{
-			var result = ReadString(length, Encoding.UTF8, true);
+			string result = ReadString(length, Encoding.UTF8, true);
 			return result;
 		}
 	}
@@ -167,7 +167,7 @@ public class GenericFileReader : GenericReaderBase
 		if (length == 0)
 			return [];
 
-		var size = length * Unsafe.SizeOf<T>();
+		int size = length * Unsafe.SizeOf<T>();
 		EnsureBufferAllocated(size);
 		var result = _bufferReader.ReadArray<T>(length);
 
@@ -177,7 +177,7 @@ public class GenericFileReader : GenericReaderBase
 
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
-		var buffer = useSharedArrayPool
+		byte[] buffer = useSharedArrayPool
 			? ArrayPool<byte>.Shared.Rent(length)
 			: GC.AllocateUninitializedArray<byte>(length);
 		EnsureBufferAllocated(length);

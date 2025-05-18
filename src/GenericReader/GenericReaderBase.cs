@@ -35,7 +35,7 @@ public abstract class GenericReaderBase : IGenericReader
 
 	public bool ReadBoolean()
 	{
-		var num = Read<uint>();
+		uint num = Read<uint>();
 		Debug.Assert(num is 0 or 1);
 		return num != 0;
 	}
@@ -47,7 +47,7 @@ public abstract class GenericReaderBase : IGenericReader
 	}
 	public string ReadString(Encoding enc)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadString(length, enc);
 	}
 	public string ReadString<TOffset>(Encoding enc, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
@@ -74,7 +74,7 @@ public abstract class GenericReaderBase : IGenericReader
 	}
 	public string[] ReadFStringArray()
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadFStringArray(length);
 	}
 
@@ -90,9 +90,9 @@ public abstract class GenericReaderBase : IGenericReader
 		if (length == 0)
 			return [];
 
-		var result = GC.AllocateUninitializedArray<string>(length);
+		string[] result = GC.AllocateUninitializedArray<string>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = ReadFString();
 
 		return result;
@@ -107,7 +107,7 @@ public abstract class GenericReaderBase : IGenericReader
 
 	public T[] ReadArray<T>() where T : struct
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray<T>(length);
 	}
 	public T[] ReadArray<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
@@ -129,7 +129,7 @@ public abstract class GenericReaderBase : IGenericReader
 
 	public T[] ReadArray<T>(Func<T> getter)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -137,13 +137,13 @@ public abstract class GenericReaderBase : IGenericReader
 		where TOffset : IBinaryInteger<TOffset>
 	{
 		SeekVoid(offset, origin);
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
 	public T[] ReadArray<T>(Func<IGenericReader, T> getter)
 	{
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -152,7 +152,7 @@ public abstract class GenericReaderBase : IGenericReader
 		where TOffset : IBinaryInteger<TOffset>
 	{
 		SeekVoid(offset, origin);
-		var length = Read<int>();
+		int length = Read<int>();
 		return ReadArray(length, getter);
 	}
 
@@ -163,7 +163,7 @@ public abstract class GenericReaderBase : IGenericReader
 
 		var result = GC.AllocateUninitializedArray<T>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = getter();
 
 		return result;
@@ -183,7 +183,7 @@ public abstract class GenericReaderBase : IGenericReader
 
 		var result = GC.AllocateUninitializedArray<T>(length);
 
-		for (var i = 0; i < length; i++)
+		for (int i = 0; i < length; i++)
 			result[i] = getter(this);
 
 		return result;

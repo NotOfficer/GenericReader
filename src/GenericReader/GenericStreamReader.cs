@@ -14,7 +14,7 @@ public class GenericStreamReader : GenericReaderBase
 	public GenericStreamReader(Stream stream)
 	{
 		_stream = stream;
-		var streamLength = _stream.Length;
+		long streamLength = _stream.Length;
 		LengthLong = streamLength;
 		Length = unchecked((int)streamLength);
 	}
@@ -66,12 +66,12 @@ public class GenericStreamReader : GenericReaderBase
 
 	public override T Read<T>() where T : struct
 	{
-		var size = Unsafe.SizeOf<T>();
+		int size = Unsafe.SizeOf<T>();
 		T result;
 
 		if (size > Constants.MaxStackSize)
 		{
-			var buffer = ArrayPool<byte>.Shared.Rent(size);
+			byte[] buffer = ArrayPool<byte>.Shared.Rent(size);
 			_stream.ReadExactly(buffer, 0, size);
 			result = Unsafe.ReadUnaligned<T>(ref buffer[0]);
 			ArrayPool<byte>.Shared.Return(buffer);
@@ -91,7 +91,7 @@ public class GenericStreamReader : GenericReaderBase
 		if (dest.IsEmpty)
 			return;
 
-		var size = Unsafe.SizeOf<T>();
+		int size = Unsafe.SizeOf<T>();
 		var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
 		_stream.ReadExactly(span);
 	}
@@ -107,7 +107,7 @@ public class GenericStreamReader : GenericReaderBase
 
 		if (length > Constants.MaxStackSize)
 		{
-			var buffer = ArrayPool<byte>.Shared.Rent(length);
+			byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
 			var span = new Span<byte>(buffer, 0, length);
 			_stream.ReadExactly(span);
 			if (trimNull)
@@ -130,7 +130,7 @@ public class GenericStreamReader : GenericReaderBase
 	public override string ReadFString()
 	{
 		// > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
-		var length = Read<int>();
+		int length = Read<int>();
 		if (length == 0)
 			return string.Empty;
 
@@ -141,14 +141,14 @@ public class GenericStreamReader : GenericReaderBase
 			if (length == int.MinValue)
 				throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
-			var pLength = length * -sizeof(char);
-			var result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
+			int pLength = length * -sizeof(char);
+			string result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
 			PositionLong += sizeof(char);
 			return result;
 		}
 		else
 		{
-			var result = ReadString(length, Encoding.UTF8, true);
+			string result = ReadString(length, Encoding.UTF8, true);
 			return result;
 		}
 	}
@@ -158,12 +158,12 @@ public class GenericStreamReader : GenericReaderBase
 		if (length == 0)
 			return [];
 
-		var size = length * Unsafe.SizeOf<T>();
+		int size = length * Unsafe.SizeOf<T>();
 		var result = GC.AllocateUninitializedArray<T>(length);
 
 		if (size > Constants.MaxStackSize)
 		{
-			var buffer = ArrayPool<byte>.Shared.Rent(size);
+			byte[] buffer = ArrayPool<byte>.Shared.Rent(size);
 			_stream.ReadExactly(buffer, 0, size);
 			Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
 			ArrayPool<byte>.Shared.Return(buffer);
@@ -180,7 +180,7 @@ public class GenericStreamReader : GenericReaderBase
 
 	public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
 	{
-		var buffer = useSharedArrayPool
+		byte[] buffer = useSharedArrayPool
 			? ArrayPool<byte>.Shared.Rent(length)
 			: GC.AllocateUninitializedArray<byte>(length);
 		_stream.ReadExactly(buffer, 0, length);

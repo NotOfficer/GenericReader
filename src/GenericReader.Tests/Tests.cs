@@ -177,7 +177,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 		AddFString(true, string.Empty);
 		AddFString(true, Helpers.GetString());
 		AddFString(true, Helpers.GetString(128));
-		for (var i = 0; i < 32; i++)
+		for (int i = 0; i < 32; i++)
 		{
 			Add<sbyte>();
 			Add<byte>();
@@ -226,14 +226,14 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 		Values.Add(value);
 		VerifyOperations.Add((ref TReader reader) =>
 		{
-			var readValue = reader.ReadString(encoding);
+			string readValue = reader.ReadString(encoding);
 			return readValue.Equals(value, StringComparison.Ordinal);
 		});
 		WriteOperations.Add(writer =>
 		{
-			var numBytes = encoding.GetMaxByteCount(value.Length);
+			int numBytes = encoding.GetMaxByteCount(value.Length);
 			Span<byte> bytes = stackalloc byte[numBytes];
-			var written = encoding.GetBytes(value, bytes);
+			int written = encoding.GetBytes(value, bytes);
 			writer.Write(written);
 			writer.Write(bytes.Slice(0, written));
 		});
@@ -245,19 +245,19 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 		Values.Add(value);
 		VerifyOperations.Add((ref TReader reader) =>
 		{
-			var readValue = reader.ReadFString();
+			string readValue = reader.ReadFString();
 			return readValue.Equals(value, StringComparison.Ordinal);
 		});
 		WriteOperations.Add(writer =>
 		{
 			var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
-			var numBytes = encoding.GetMaxByteCount(value.Length);
+			int numBytes = encoding.GetMaxByteCount(value.Length);
 			Span<byte> bytes = stackalloc byte[numBytes];
-			var written = encoding.GetBytes(value, bytes);
+			int written = encoding.GetBytes(value, bytes);
 			writer.Write(unicode ? -(value.Length + 1) : written + (nullTerminated ? 1 : 0));
 			writer.Write(bytes.Slice(0, written));
 			if (!nullTerminated) return;
-			for (var i = 0; i < (unicode ? sizeof(char) : sizeof(byte)); i++)
+			for (int i = 0; i < (unicode ? sizeof(char) : sizeof(byte)); i++)
 				writer.Write(byte.MinValue);
 		});
 	}
