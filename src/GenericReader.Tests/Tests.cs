@@ -109,7 +109,7 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader
         {
             using var bw = new BinaryWriter(ms, Encoding.UTF8, true);
 
-            foreach (var writeOperation in _values.WriteOperations)
+            foreach (Action<BinaryWriter> writeOperation in _values.WriteOperations)
             {
                 writeOperation(bw);
             }
@@ -120,7 +120,7 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader
 
     public void Test(ref TReader reader)
     {
-        foreach (var verifyOperation in _values.VerifyOperations)
+        foreach (VerifyFunc<TReader> verifyOperation in _values.VerifyOperations)
         {
             Assert.True(verifyOperation(ref reader));
         }
@@ -129,15 +129,19 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader
     }
 }
 
+public delegate bool VerifyFunc<TReader>(ref TReader reader) where TReader : IGenericReader
+#if NET9_0_OR_GREATER
+    , allows ref struct
+#endif
+;
+
 public class BinaryDataValues<TReader> where TReader : IGenericReader
 #if NET9_0_OR_GREATER
     , allows ref struct
 #endif
 {
-    public delegate bool VerifyFunc(ref TReader reader);
-
     public List<object> Values { get; }
-    public List<VerifyFunc> VerifyOperations { get; }
+    public List<VerifyFunc<TReader>> VerifyOperations { get; }
     public List<Action<BinaryWriter>> WriteOperations { get; }
 
     public BinaryDataValues()
@@ -211,7 +215,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
         Values.Add(value);
         VerifyOperations.Add((ref TReader reader) =>
         {
-            var readValue = reader.Read<TValue>();
+            TValue readValue = reader.Read<TValue>();
             return readValue.Equals(value);
         });
         WriteOperations.Add(writer =>
@@ -250,7 +254,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
         });
         WriteOperations.Add(writer =>
         {
-            var encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
+            Encoding encoding = unicode ? Encoding.Unicode : Encoding.UTF8;
             int numBytes = encoding.GetMaxByteCount(value.Length);
             Span<byte> bytes = stackalloc byte[numBytes];
             int written = encoding.GetBytes(value, bytes);
@@ -265,7 +269,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader
 
 public static class Helpers
 {
-    private static readonly string[] Names =
+    private static readonly string[] _names =
     [
         "Alice Johnson", "Michael Smith", "Emma Brown", "James Williams", "Sophia Martinez",
         "Benjamin Taylor", "Olivia Wilson", "William Davis", "Ava Thompson", "Mason White",
@@ -281,7 +285,7 @@ public static class Helpers
         "Oliver Bryant", "Savannah Campbell", "Levi Murphy", "Stella Foster", "Sebastian Simmons"
     ];
 
-    public static string GetName() => Names[RandomNumberGenerator.GetInt32(Names.Length)];
+    public static string GetName() => _names[RandomNumberGenerator.GetInt32(_names.Length)];
 
     public static string GetString(int length) => RandomNumberGenerator.GetHexString(length);
     public static string GetString() => GetString(RandomNumberGenerator.GetInt32(12, 64));
