@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <NeutralLanguage>en</NeutralLanguage>
     <Authors>NotOfficer</Authors>
     <Copyright>Copyright (c) 2025 NotOfficer</Copyright>
