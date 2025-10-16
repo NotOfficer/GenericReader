@@ -24,14 +24,6 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Decrypt signing key and delete public key
-        run: |
-          openssl aes-256-cbc -d -pbkdf2 \
-            -in key_private.snk.enc \
-            -out key_private.snk \
-            -pass pass:${{ secrets.SNK_PASSWORD }}
-          rm -f key_public.snk
-
       - name: Restore dependencies
         run: dotnet restore
 
