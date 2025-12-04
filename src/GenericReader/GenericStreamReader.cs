@@ -92,7 +92,7 @@ public class GenericStreamReader : GenericReaderBase
             return;
 
         int size = Unsafe.SizeOf<T>();
-        var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
+        Span<byte> span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
         _stream.ReadExactly(span);
     }
 
@@ -159,7 +159,7 @@ public class GenericStreamReader : GenericReaderBase
             return [];
 
         int size = length * Unsafe.SizeOf<T>();
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         if (size > Constants.MaxStackSize)
         {

@@ -107,7 +107,7 @@ public class GenericFileReader : GenericReaderBase
     {
         int size = Unsafe.SizeOf<T>();
         EnsureBufferAllocated(size);
-        var result = _bufferReader.Read<T>();
+        T result = _bufferReader.Read<T>();
         PositionLong += size;
         return result;
     }
@@ -169,7 +169,7 @@ public class GenericFileReader : GenericReaderBase
 
         int size = length * Unsafe.SizeOf<T>();
         EnsureBufferAllocated(size);
-        var result = _bufferReader.ReadArray<T>(length);
+        T[] result = _bufferReader.ReadArray<T>(length);
 
         PositionLong += size;
         return result;

@@ -76,7 +76,7 @@ public class GenericBufferReader : GenericReaderBase
 
     public override T Read<T>() where T : struct
     {
-        var result = Unsafe.ReadUnaligned<T>(ref _memory.Span[Position]);
+        T result = Unsafe.ReadUnaligned<T>(ref _memory.Span[Position]);
         int size = Unsafe.SizeOf<T>();
         Position += size;
         return result;
@@ -85,7 +85,7 @@ public class GenericBufferReader : GenericReaderBase
     public override void Read<T>(Span<T> dest) where T : struct
     {
         int size = Unsafe.SizeOf<T>();
-        var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
+        Span<byte> span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
         _memory.Span.Slice(Position, span.Length).CopyTo(span);
         Position += span.Length;
     }
@@ -97,7 +97,7 @@ public class GenericBufferReader : GenericReaderBase
 
     internal string ReadString(int length, Encoding enc, bool trimNull)
     {
-        var span = _memory.Span.Slice(Position, length);
+        Span<byte> span = _memory.Span.Slice(Position, length);
         if (trimNull)
             span = span.TrimEnd(byte.MinValue);
         string result = enc.GetString(span);
@@ -120,14 +120,14 @@ public class GenericBufferReader : GenericReaderBase
                 throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
             int pLength = length * -sizeof(char);
-            var span = _memory.Span.Slice(Position, pLength - sizeof(char));
+            Span<byte> span = _memory.Span.Slice(Position, pLength - sizeof(char));
             string result = Encoding.Unicode.GetString(span);
             Position += pLength;
             return result;
         }
         else
         {
-            var span = _memory.Span.Slice(Position, length).TrimEnd(byte.MinValue);
+            Span<byte> span = _memory.Span.Slice(Position, length).TrimEnd(byte.MinValue);
             string result = Encoding.UTF8.GetString(span);
             Position += length;
             return result;
@@ -149,13 +149,13 @@ public class GenericBufferReader : GenericReaderBase
                 throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
             int pLength = length * -sizeof(char);
-            var memory = _memory.Slice(Position, pLength - sizeof(char));
+            Memory<byte> memory = _memory.Slice(Position, pLength - sizeof(char));
             Position += pLength;
             return new FStringMemory(memory, true);
         }
         else
         {
-            var memory = _memory.Slice(Position, length).TrimEnd(byte.MinValue);
+            Memory<byte> memory = _memory.Slice(Position, length).TrimEnd(byte.MinValue);
             Position += length;
             return new FStringMemory(memory, false);
         }
@@ -163,7 +163,7 @@ public class GenericBufferReader : GenericReaderBase
 
     public FStringMemory[] ReadFStringMemoryArray(int length)
     {
-        var result = GC.AllocateUninitializedArray<FStringMemory>(length);
+        FStringMemory[] result = GC.AllocateUninitializedArray<FStringMemory>(length);
 
         for (int i = 0; i < length; i++)
             result[i] = ReadFStringMemory();
@@ -183,7 +183,7 @@ public class GenericBufferReader : GenericReaderBase
             return [];
 
         int size = length * Unsafe.SizeOf<T>();
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
         Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _memory.Span[Position], (uint)size);
         Position += size;
         return result;
@@ -253,7 +253,7 @@ public class GenericBufferReader : GenericReaderBase
 
     public Memory<byte> ReadMemory(int length)
     {
-        var result = _memory.Slice(Position, length);
+        Memory<byte> result = _memory.Slice(Position, length);
         Position += length;
         return result;
     }
@@ -266,7 +266,7 @@ public class GenericBufferReader : GenericReaderBase
 
     public Span<byte> ReadSpan(int length)
     {
-        var result = _memory.Span.Slice(Position, length);
+        Span<byte> result = _memory.Span.Slice(Position, length);
         Position += length;
         return result;
     }
@@ -280,9 +280,9 @@ public class GenericBufferReader : GenericReaderBase
     public Span<T> ReadSpan<T>(int length) where T : struct
     {
         int size = length * Unsafe.SizeOf<T>();
-        var memorySpan = _memory.Span.Slice(Position, size);
-        ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(memorySpan));
-        var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
+        Span<byte> memorySpan = _memory.Span.Slice(Position, size);
+        ref T reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(memorySpan));
+        Span<T> resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
         Position += size;
         return resultSpan;
     }

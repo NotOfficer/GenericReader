@@ -75,7 +75,7 @@ public ref struct GenericSpanReader : IGenericReader
 
     public T Read<T>() where T : struct
     {
-        var result = Unsafe.ReadUnaligned<T>(ref _span[Position]);
+        T result = Unsafe.ReadUnaligned<T>(ref _span[Position]);
         int size = Unsafe.SizeOf<T>();
         Position += size;
         return result;
@@ -91,7 +91,7 @@ public ref struct GenericSpanReader : IGenericReader
     public void Read<T>(Span<T> dest) where T : struct
     {
         int size = Unsafe.SizeOf<T>();
-        var span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
+        Span<byte> span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
         _span.Slice(Position, span.Length).CopyTo(span);
         Position += span.Length;
     }
@@ -153,14 +153,14 @@ public ref struct GenericSpanReader : IGenericReader
                 throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
 
             int pLength = length * -sizeof(char);
-            var span = _span.Slice(Position, pLength - sizeof(char));
+            Span<byte> span = _span.Slice(Position, pLength - sizeof(char));
             string result = Encoding.Unicode.GetString(span);
             Position += pLength;
             return result;
         }
         else
         {
-            var span = _span.Slice(Position, length).TrimEnd(byte.MinValue);
+            Span<byte> span = _span.Slice(Position, length).TrimEnd(byte.MinValue);
             string result = Encoding.UTF8.GetString(span);
             Position += length;
             return result;
@@ -270,7 +270,7 @@ public ref struct GenericSpanReader : IGenericReader
             return [];
 
         int size = length * Unsafe.SizeOf<T>();
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
         Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _span[Position], (uint)size);
         Position += size;
         return result;
@@ -335,7 +335,7 @@ public ref struct GenericSpanReader : IGenericReader
         if (length == 0)
             return [];
 
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         for (int i = 0; i < length; i++)
             result[i] = getter();
@@ -356,7 +356,7 @@ public ref struct GenericSpanReader : IGenericReader
         if (length == 0)
             return [];
 
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         /*for (var i = 0; i < length; i++)
             result[i] = getter(this);*/
@@ -369,7 +369,7 @@ public ref struct GenericSpanReader : IGenericReader
         if (length == 0)
             return [];
 
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         for (int i = 0; i < length; i++)
             result[i] = getter(ref this);
@@ -419,7 +419,7 @@ public ref struct GenericSpanReader : IGenericReader
 
     public Span<byte> ReadSpan(int length)
     {
-        var result = _span.Slice(Position, length);
+        Span<byte> result = _span.Slice(Position, length);
         Position += length;
         return result;
     }
@@ -433,9 +433,9 @@ public ref struct GenericSpanReader : IGenericReader
     public Span<T> ReadSpan<T>(int length) where T : struct
     {
         int size = length * Unsafe.SizeOf<T>();
-        var span = _span.Slice(Position, size);
-        ref var reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
-        var resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
+        Span<byte> span = _span.Slice(Position, size);
+        ref T reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
+        Span<T> resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
         Position += size;
         return resultSpan;
     }

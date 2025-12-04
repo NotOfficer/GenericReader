@@ -161,7 +161,7 @@ public abstract class GenericReaderBase : IGenericReader
         if (length == 0)
             return [];
 
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         for (int i = 0; i < length; i++)
             result[i] = getter();
@@ -181,7 +181,7 @@ public abstract class GenericReaderBase : IGenericReader
         if (length == 0)
             return [];
 
-        var result = GC.AllocateUninitializedArray<T>(length);
+        T[] result = GC.AllocateUninitializedArray<T>(length);
 
         for (int i = 0; i < length; i++)
             result[i] = getter(this);
