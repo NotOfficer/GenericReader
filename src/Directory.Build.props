@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
