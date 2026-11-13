@@ -2,16 +2,17 @@
 
 namespace GenericReader;
 
+// The characters of an FString, without its terminator, as a view of the reader's memory.
 public readonly struct FStringMemory
 {
-    public Memory<byte> Memory { get; }
+    public ReadOnlyMemory<byte> Memory { get; }
     public bool IsUnicode { get; }
 
-    public Span<byte> GetSpan() => Memory.Span;
+    public ReadOnlySpan<byte> GetSpan() => Memory.Span;
     public bool IsEmpty() => Memory.IsEmpty;
     public Encoding GetEncoding() => IsUnicode ? Encoding.Unicode : Encoding.UTF8;
 
-    public FStringMemory(Memory<byte> memory, bool isUnicode)
+    public FStringMemory(ReadOnlyMemory<byte> memory, bool isUnicode)
     {
         Memory = memory;
         IsUnicode = isUnicode;

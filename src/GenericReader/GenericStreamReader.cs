@@ -6,29 +6,55 @@ using System.Text;
 
 namespace GenericReader;
 
+// Reads from a seekable stream. Every read is checked against Length before anything is allocated or read, and
+// a read that fails puts the stream back where it started, even when the stream ends before the Length it reported
+// (the destination may then hold part of the data).
 public class GenericStreamReader : GenericReaderBase
 {
     private readonly Stream _stream;
+    private readonly bool _leaveOpen;
 
     public GenericStreamReader(string filePath) : this(File.OpenRead(filePath)) { }
-    public GenericStreamReader(Stream stream)
+
+    // Unless leaveOpen, the reader owns the stream: it disposes it, also when this constructor fails after the
+    // argument was validated (for example for a stream that cannot seek).
+    public GenericStreamReader(Stream stream, bool leaveOpen = false)
     {
+        ArgumentNullException.ThrowIfNull(stream);
         _stream = stream;
-        long streamLength = _stream.Length;
-        LengthLong = streamLength;
-        Length = unchecked((int)streamLength);
+        _leaveOpen = leaveOpen;
+
+        try
+        {
+            LengthLong = stream.Length;
+        }
+        catch
+        {
+            if (!leaveOpen)
+                stream.Dispose();
+            throw;
+        }
     }
 
     public override int Position
     {
-        get => unchecked((int)PositionLong);
+        get => int.CreateChecked(PositionLong);
         set => PositionLong = value;
     }
 
     public override long PositionLong
     {
-        get => _stream.Position;
-        set => _stream.Position = value;
+        get
+        {
+            ThrowIfDisposed();
+            return _stream.Position;
+        }
+        set
+        {
+            ThrowIfDisposed();
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _stream.Position = value;
+        }
     }
 
     public override TPosition GetPosition<TPosition>()
@@ -38,10 +64,11 @@ public class GenericStreamReader : GenericReaderBase
 
     public override void SetPosition<TPosition>(TPosition position)
     {
-        PositionLong = long.CreateChecked(position);
+        ThrowIfDisposed();
+        _stream.Position = ReaderHelpers.ToPosition(position, long.MaxValue);
     }
 
-    public override int Length { get; }
+    public override int Length => int.CreateChecked(LengthLong);
     public override long LengthLong { get; }
 
     public override TLength GetLength<TLength>()
@@ -51,157 +78,171 @@ public class GenericStreamReader : GenericReaderBase
 
     public override int Seek<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
     {
-        return unchecked((int)SeekLong(offset, origin));
+        // checked against int.MaxValue before the stream moves
+        long target = ReaderHelpers.GetSeekTarget(offset, origin, PositionLong, LengthLong, int.MaxValue);
+        _stream.Position = target;
+        return (int)target;
     }
 
     public override long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
     {
-        return _stream.Seek(long.CreateChecked(offset), origin);
+        SeekVoid(offset, origin);
+        return PositionLong;
     }
 
     public override void SeekVoid<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
     {
-        _stream.Seek(long.CreateChecked(offset), origin);
+        _stream.Position = ReaderHelpers.GetSeekTarget(offset, origin, PositionLong, LengthLong, long.MaxValue);
     }
 
-    public override T Read<T>() where T : struct
+    // Throws unless byteCount (not negative) bytes are left from Position, which it returns.
+    private long EnsureAvailable(long byteCount)
     {
-        int size = Unsafe.SizeOf<T>();
-        T result;
+        long position = PositionLong;
+        if (byteCount > LengthLong - position)
+            ThrowHelper.ThrowEndOfStream();
+        return position;
+    }
 
-        if (size > Constants.MaxStackSize)
+    // Fills dest, or throws with the stream back at start, where dest begins. The callers have checked that the bytes
+    // are available and pass the position that EnsureAvailable returned, so that it is not queried again.
+    private void ReadExactly(Span<byte> dest, long start)
+    {
+        try
         {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(size);
-            _stream.ReadExactly(buffer, 0, size);
-            result = Unsafe.ReadUnaligned<T>(ref buffer[0]);
-            ArrayPool<byte>.Shared.Return(buffer);
+            _stream.ReadExactly(dest);
         }
-        else
+        catch
         {
-            Span<byte> span = stackalloc byte[size];
-            _stream.ReadExactly(span);
-            result = Unsafe.ReadUnaligned<T>(ref span[0]);
+            _stream.Position = start; // the stream ended before the Length it reported
+            throw;
         }
+    }
 
+    // ReadExactly for elements, which may take more than int.MaxValue bytes.
+    private void ReadExactly<T>(Span<T> dest, long start) where T : unmanaged
+    {
+        try
+        {
+            // MemoryMarshal.AsBytes covers at most int.MaxValue bytes, so a larger destination is read in parts
+            int chunkLength = int.MaxValue / Unsafe.SizeOf<T>();
+            while (dest.Length > chunkLength)
+            {
+                _stream.ReadExactly(MemoryMarshal.AsBytes(dest[..chunkLength]));
+                dest = dest[chunkLength..];
+            }
+
+            _stream.ReadExactly(MemoryMarshal.AsBytes(dest));
+        }
+        catch
+        {
+            _stream.Position = start; // the stream ended before the Length it reported
+            throw;
+        }
+    }
+
+    public override T Read<T>()
+    {
+        long start = EnsureAvailable(Unsafe.SizeOf<T>());
+        Unsafe.SkipInit(out T result);
+        ReadExactly(MemoryMarshal.AsBytes(new Span<T>(ref result)), start);
         return result;
     }
 
-    public override void Read<T>(Span<T> dest) where T : struct
+    public override void Read<T>(Span<T> dest)
     {
-        if (dest.IsEmpty)
-            return;
-
-        int size = Unsafe.SizeOf<T>();
-        Span<byte> span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
-        _stream.ReadExactly(span);
+        ReadExactly(dest, EnsureAvailable((long)dest.Length * Unsafe.SizeOf<T>()));
     }
 
     public override string ReadString(int length, Encoding enc)
     {
-        return ReadString(length, enc, false);
-    }
-
-    private string ReadString(int length, Encoding enc, bool trimNull)
-    {
-        string result;
-
-        if (length > Constants.MaxStackSize)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
-            var span = new Span<byte>(buffer, 0, length);
-            _stream.ReadExactly(span);
-            if (trimNull)
-                span = span.TrimEnd(byte.MinValue);
-            result = enc.GetString(span);
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-        else
-        {
-            Span<byte> span = stackalloc byte[length];
-            _stream.ReadExactly(span);
-            if (trimNull)
-                span = span.TrimEnd(byte.MinValue);
-            result = enc.GetString(span);
-        }
-
-        return result;
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentNullException.ThrowIfNull(enc);
+        return ReadAndDecode(length, enc, fStringLength: 0);
     }
 
     public override string ReadFString()
     {
-        // > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
         int length = Read<int>();
         if (length == 0)
             return string.Empty;
 
-        // 1 byte/char is removed because of null terminator ('\0')
-        if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
-        {
-            // If length cannot be negated due to integer overflow, Ar is corrupted.
-            if (length == int.MinValue)
-                throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
+        // the terminator is read as well, so that a missing one throws
+        return ReadAndDecode(ReaderHelpers.GetFStringByteCount(length), Encoding.UTF8, length);
+    }
 
-            int pLength = length * -sizeof(char);
-            string result = ReadString(pLength - sizeof(char), Encoding.Unicode, false);
-            PositionLong += sizeof(char);
-            return result;
-        }
-        else
+    // Reads byteCount bytes and decodes them with enc, or as the FString of fStringLength when that is not 0. Throws
+    // with the stream back where it started, also when decoding fails, like the other readers.
+    private string ReadAndDecode(int byteCount, Encoding enc, int fStringLength)
+    {
+        long start = EnsureAvailable(byteCount);
+        using TempBuffer buffer = new(byteCount, byteCount <= Constants.MaxStackSize ? stackalloc byte[byteCount] : default);
+        try
         {
-            string result = ReadString(length, Encoding.UTF8, true);
-            return result;
+            _stream.ReadExactly(buffer.Span);
+            return fStringLength == 0
+                ? enc.GetString(buffer.Span)
+                : ReaderHelpers.DecodeFString(buffer.Span, fStringLength);
+        }
+        catch
+        {
+            _stream.Position = start;
+            throw;
         }
     }
 
-    public override T[] ReadArray<T>(int length) where T : struct
+    public override T[] ReadArray<T>(int length)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        // 64-bit, so that the byte count cannot wrap around, and checked before allocating
+        long start = EnsureAvailable((long)length * Unsafe.SizeOf<T>());
         if (length == 0)
             return [];
+        ReaderHelpers.ValidateArrayLength(length);
 
-        int size = length * Unsafe.SizeOf<T>();
         T[] result = GC.AllocateUninitializedArray<T>(length);
-
-        if (size > Constants.MaxStackSize)
-        {
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(size);
-            _stream.ReadExactly(buffer, 0, size);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref buffer[0], (uint)size);
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-        else
-        {
-            Span<byte> span = stackalloc byte[size];
-            _stream.ReadExactly(span);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref span[0], (uint)size);
-        }
-
+        ReadExactly<T>(result, start);
         return result;
     }
 
+    // With useSharedArrayPool, the array comes from ArrayPool<byte>.Shared and may be longer than length; only the
+    // first length bytes hold data.
     public byte[] ReadBytes(int length, bool useSharedArrayPool = false)
     {
-        byte[] buffer = useSharedArrayPool
-            ? ArrayPool<byte>.Shared.Rent(length)
-            : GC.AllocateUninitializedArray<byte>(length);
-        _stream.ReadExactly(buffer, 0, length);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        long start = EnsureAvailable(length);
+
+        if (!useSharedArrayPool)
+        {
+            byte[] result = GC.AllocateUninitializedArray<byte>(length);
+            ReadExactly(result, start);
+            return result;
+        }
+
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            ReadExactly(buffer.AsSpan(0, length), start);
+        }
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            throw;
+        }
+
         return buffer;
     }
 
-    public byte[] ReadBytes<TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current, bool useSharedArrayPool = false) 
+    public byte[] ReadBytes<TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current, bool useSharedArrayPool = false)
         where TOffset : IBinaryInteger<TOffset>
     {
-        Seek(offset, origin);
+        SeekVoid(offset, origin);
         return ReadBytes(length, useSharedArrayPool);
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected override void Dispose(bool disposing)
     {
-        if (disposing) _stream?.Dispose();
-    }
-
-    public override void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
+        if (disposing && !_leaveOpen)
+            _stream.Dispose();
     }
 }

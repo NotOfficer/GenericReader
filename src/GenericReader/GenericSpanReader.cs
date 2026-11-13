@@ -10,93 +10,143 @@ public ref struct GenericSpanReader : IGenericReader
     public delegate T GetterFunc<out T>(ref GenericSpanReader reader);
     private const string ObsoleteMessage = "This method cannot be used since this reader is a ref struct";
 
-    private readonly Span<byte> _span;
+    private readonly ReadOnlySpan<byte> _span;
+    private int _position;
+    // stored as the difference to the default, so that default(GenericSpanReader) has the default limit too
+    private long _maxArrayAllocationSizeOffset;
 
-    public GenericSpanReader(byte[] buffer, int start, int length) : this(new Span<byte>(buffer, start, length)) { }
-    public GenericSpanReader(byte[] buffer) : this(new Span<byte>(buffer)) { }
+    public GenericSpanReader(byte[] buffer, int start, int length) : this(new ReadOnlySpan<byte>(buffer, start, length)) { }
+    public GenericSpanReader(byte[] buffer) : this(new ReadOnlySpan<byte>(buffer)) { }
     public GenericSpanReader(ReadOnlyMemory<byte> memory) : this(memory.Span) { }
-    public GenericSpanReader(Memory<byte> memory) : this(memory.Span) { }
-    public GenericSpanReader(ReadOnlySpan<byte> span) : this(MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(span), span.Length)) { }
-    public GenericSpanReader(Span<byte> span)
+    public GenericSpanReader(ReadOnlySpan<byte> span)
     {
         _span = span;
-        LengthLong = Length = span.Length;
     }
 
-    public int Position { get; set; }
+    public long MaxArrayAllocationSize
+    {
+        readonly get => IGenericReader.DefaultMaxArrayAllocationSize + _maxArrayAllocationSizeOffset;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _maxArrayAllocationSizeOffset = value - IGenericReader.DefaultMaxArrayAllocationSize;
+        }
+    }
+
+    public int Position
+    {
+        readonly get => _position;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _position = value;
+        }
+    }
 
     public long PositionLong
     {
-        get => Position;
-        set => Position = int.CreateChecked(value);
+        readonly get => _position;
+        set => _position = ReaderHelpers.ToInt32Position(value);
     }
 
-    public TPosition GetPosition<TPosition>() where TPosition : IBinaryInteger<TPosition>
+    public readonly TPosition GetPosition<TPosition>() where TPosition : IBinaryInteger<TPosition>
     {
-        return TPosition.CreateChecked(Position);
+        return TPosition.CreateChecked(_position);
     }
 
     public void SetPosition<TPosition>(TPosition position) where TPosition : IBinaryInteger<TPosition>
     {
-        Position = int.CreateChecked(position);
+        _position = (int)ReaderHelpers.ToPosition(position, int.MaxValue);
     }
 
-    public int Length { get; }
-    public long LengthLong { get; }
+    public readonly int Length => _span.Length;
+    public readonly long LengthLong => _span.Length;
 
-    public TLength GetLength<TLength>() where TLength : IBinaryInteger<TLength>
+    public readonly TLength GetLength<TLength>() where TLength : IBinaryInteger<TLength>
     {
-        return TLength.CreateChecked(Length);
+        return TLength.CreateChecked(_span.Length);
     }
 
     public int Seek<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
-        return Position;
+        return _position;
     }
 
     public long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
-        return Position;
+        return _position;
     }
 
     public void SeekVoid<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>
     {
-        Position = origin switch
-        {
-            SeekOrigin.Begin => int.CreateChecked(offset),
-            SeekOrigin.Current => Position + int.CreateChecked(offset),
-            SeekOrigin.End => Length + int.CreateChecked(offset),
-            _ => throw new ArgumentOutOfRangeException(nameof(origin), origin, null)
-        };
+        _position = (int)ReaderHelpers.GetSeekTarget(offset, origin, _position, _span.Length, int.MaxValue);
     }
 
-    public T Read<T>() where T : struct
+    // Throws unless byteCount (not negative) bytes are left from Position. Position is never negative, so the
+    // subtraction cannot overflow; it is negative when Position lies past the end.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private readonly void EnsureAvailable(long byteCount)
     {
-        T result = Unsafe.ReadUnaligned<T>(ref _span[Position]);
+        if (byteCount > _span.Length - _position)
+            ThrowHelper.ThrowEndOfStream();
+    }
+
+    // The next byteCount (not negative) bytes, without moving Position. The two Peek overloads are the only places
+    // that create spans over the data, so no span is created without a bounds check.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private readonly ReadOnlySpan<byte> Peek(int byteCount)
+    {
+        // both are at most int.MaxValue, so the unsigned sum cannot wrap around
+        if ((uint)_position + (uint)byteCount > (uint)_span.Length)
+            ThrowHelper.ThrowEndOfStream();
+
+        return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_span), (nuint)(uint)_position), byteCount);
+    }
+
+    // Peek for a computed byte count such as length * SizeOf<T>, which may not fit in an int.
+    private readonly ReadOnlySpan<byte> Peek(long byteCount)
+    {
+        EnsureAvailable(byteCount);
+        // at most the length of the data now, so the cast cannot truncate
+        return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_span), (nuint)(uint)_position), (int)byteCount);
+    }
+
+    // A length prefix in the data: a negative one means the data is corrupted.
+    private int ReadLength()
+    {
+        int length = Read<int>();
+        if (length < 0)
+            ThrowHelper.ThrowNegativeLength(length);
+        return length;
+    }
+
+    public T Read<T>() where T : unmanaged
+    {
         int size = Unsafe.SizeOf<T>();
-        Position += size;
+        T result = Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(Peek(size)));
+        _position += size;
         return result;
     }
 
     public T Read<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
-        where T : struct where TOffset : IBinaryInteger<TOffset>
+        where T : unmanaged where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
         return Read<T>();
     }
 
-    public void Read<T>(Span<T> dest) where T : struct
+    public void Read<T>(Span<T> dest) where T : unmanaged
     {
-        int size = Unsafe.SizeOf<T>();
-        Span<byte> span = MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref dest[0]), dest.Length * size);
-        _span.Slice(Position, span.Length).CopyTo(span);
-        Position += span.Length;
+        // 64-bit: a destination of more than int.MaxValue bytes cannot fit in the data, but must not overflow either
+        ReadOnlySpan<byte> source = Peek((long)dest.Length * Unsafe.SizeOf<T>());
+        source.CopyTo(MemoryMarshal.AsBytes(dest));
+        _position += source.Length;
     }
 
     public void Read<T, TOffset>(Span<T> dest, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
-        where T : struct where TOffset : IBinaryInteger<TOffset>
+        where T : unmanaged where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
         Read(dest);
@@ -112,8 +162,8 @@ public ref struct GenericSpanReader : IGenericReader
 
     public string ReadString(Encoding enc)
     {
-        int length = Read<int>();
-        return ReadString(length, enc);
+        ArgumentNullException.ThrowIfNull(enc);
+        return ReadString(ReadLength(), enc);
     }
 
     public string ReadString<TOffset>(Encoding enc, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
@@ -132,38 +182,23 @@ public ref struct GenericSpanReader : IGenericReader
 
     public string ReadString(int length, Encoding enc)
     {
-        string result = enc.GetString(_span.Slice(Position, length));
-        Position += length;
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ArgumentNullException.ThrowIfNull(enc);
+        string result = enc.GetString(Peek(length));
+        _position += length;
         return result;
     }
 
     public string ReadFString()
     {
-        // > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
         int length = Read<int>();
         if (length == 0)
             return string.Empty;
 
-        // 1 byte/char is removed because of null terminator ('\0')
-        if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
-        {
-            // If length cannot be negated due to integer overflow, Ar is corrupted.
-            if (length == int.MinValue)
-                throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
-
-            int pLength = length * -sizeof(char);
-            Span<byte> span = _span.Slice(Position, pLength - sizeof(char));
-            string result = Encoding.Unicode.GetString(span);
-            Position += pLength;
-            return result;
-        }
-        else
-        {
-            Span<byte> span = _span.Slice(Position, length).TrimEnd(byte.MinValue);
-            string result = Encoding.UTF8.GetString(span);
-            Position += length;
-            return result;
-        }
+        int byteCount = ReaderHelpers.GetFStringByteCount(length);
+        string result = ReaderHelpers.DecodeFString(Peek(byteCount), length);
+        _position += byteCount;
+        return result;
     }
 
     public string ReadFString<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
@@ -173,11 +208,7 @@ public ref struct GenericSpanReader : IGenericReader
         return ReadFString();
     }
 
-    public string[] ReadFStringArray()
-    {
-        int length = Read<int>();
-        return ReadFStringArray(length);
-    }
+    public string[] ReadFStringArray() => ReadFStringArray(ReadLength());
 
     public string[] ReadFStringArray<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
         where TOffset : IBinaryInteger<TOffset>
@@ -188,10 +219,13 @@ public ref struct GenericSpanReader : IGenericReader
 
     public string[] ReadFStringArray(int length)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        // every FString takes at least 4 bytes (its length), so a larger count is rejected before allocating
+        EnsureAvailable((long)length * sizeof(int));
         if (length == 0)
             return [];
 
-        string[] result = GC.AllocateUninitializedArray<string>(length);
+        string[] result = new string[length];
 
         for (int i = 0; i < length; i++)
             result[i] = ReadFString();
@@ -206,77 +240,32 @@ public ref struct GenericSpanReader : IGenericReader
         return ReadFStringArray(length);
     }
 
-    /*public FStringMemory ReadFStringMemory()
-    {
-        // > 0 for ANSICHAR, < 0 for UCS2CHAR serialization
-        var length = Read<int>();
-        if (length == 0)
-            return default;
-
-        // 1 byte/char is removed because of null terminator ('\0')
-        if (length < 0) // LoadUCS2Char, Unicode, 16-bit, fixed-width
-        {
-            // If length cannot be negated due to integer overflow, Ar is corrupted.
-            if (length == int.MinValue)
-                throw new ArgumentOutOfRangeException(nameof(length), "Archive is corrupted");
-
-            var pLength = length * -sizeof(char);
-            var memory = _memory.Slice(Position, pLength - sizeof(char));
-            Position += pLength;
-            return new FStringMemory(memory, true);
-        }
-        else
-        {
-            var memory = _memory.Slice(Position, length - 1);
-            Position += length;
-            return new FStringMemory(memory, false);
-        }
-    }
-
-    public FStringMemory[] ReadFStringMemoryArray(int length)
-    {
-        var result = new FStringMemory[length];
-
-        for (var i = 0; i < length; i++)
-            result[i] = ReadFStringMemory();
-
-        return result;
-    }
-
-    public FStringMemory[] ReadFStringMemoryArray()
-    {
-        var length = Read<int>();
-        return ReadFStringMemoryArray(length);
-    }*/
-
-    public T[] ReadArray<T>() where T : struct
-    {
-        int length = Read<int>();
-        return ReadArray<T>(length);
-    }
+    public T[] ReadArray<T>() where T : unmanaged => ReadArray<T>(ReadLength());
 
     public T[] ReadArray<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current)
-        where T : struct
+        where T : unmanaged
         where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
         return ReadArray<T>();
     }
 
-    public T[] ReadArray<T>(int length) where T : struct
+    public T[] ReadArray<T>(int length) where T : unmanaged
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        // 64-bit, so that the byte count cannot wrap around, and checked before allocating
+        ReadOnlySpan<byte> source = Peek((long)length * Unsafe.SizeOf<T>());
         if (length == 0)
             return [];
 
-        int size = length * Unsafe.SizeOf<T>();
         T[] result = GC.AllocateUninitializedArray<T>(length);
-        Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref result[0]), ref _span[Position], (uint)size);
-        Position += size;
+        source.CopyTo(MemoryMarshal.AsBytes(result.AsSpan()));
+        _position += source.Length;
         return result;
     }
 
     public T[] ReadArray<T, TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
-        where T : struct
+        where T : unmanaged
         where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
@@ -285,54 +274,39 @@ public ref struct GenericSpanReader : IGenericReader
 
     public T[] ReadArray<T>(Func<T> getter)
     {
-        int length = Read<int>();
-        return ReadArray(length, getter);
+        ArgumentNullException.ThrowIfNull(getter);
+        return ReadArray(ReadLength(), getter);
     }
 
     public T[] ReadArray<T, TOffset>(Func<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
         where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
-        int length = Read<int>();
-        return ReadArray(length, getter);
-    }
-    
-    [Obsolete(ObsoleteMessage, true)]
-    public T[] ReadArray<T>(Func<IGenericReader, T> getter)
-    {
-        int length = Read<int>();
-        return ReadArray(length, getter);
+        return ReadArray(getter);
     }
 
     public T[] ReadArray<T>(GetterFunc<T> getter)
     {
-        int length = Read<int>();
-        return ReadArray(length, getter);
-    }
-    
-    [Obsolete(ObsoleteMessage, true)]
-    public T[] ReadArray<T, TOffset>(Func<IGenericReader, T> getter, TOffset offset,
-        SeekOrigin origin = SeekOrigin.Current)
-        where TOffset : IBinaryInteger<TOffset>
-    {
-        SeekVoid(offset, origin);
-        int length = Read<int>();
-        return ReadArray(length, getter);
+        ArgumentNullException.ThrowIfNull(getter);
+        return ReadArray(ReadLength(), getter);
     }
 
-    public T[] ReadArray<T, TOffset>(GetterFunc<T> getter, TOffset offset,
-        SeekOrigin origin = SeekOrigin.Current)
+    public T[] ReadArray<T, TOffset>(GetterFunc<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
         where TOffset : IBinaryInteger<TOffset>
     {
         SeekVoid(offset, origin);
-        int length = Read<int>();
-        return ReadArray(length, getter);
+        return ReadArray(getter);
     }
 
     public T[] ReadArray<T>(int length, Func<T> getter)
     {
+        ArgumentNullException.ThrowIfNull(getter);
+        ReaderHelpers.ValidateGetterArrayLength<T>(length, MaxArrayAllocationSize);
         if (length == 0)
+        {
+            EnsureAvailable(0);
             return [];
+        }
 
         T[] result = GC.AllocateUninitializedArray<T>(length);
 
@@ -349,24 +323,15 @@ public ref struct GenericSpanReader : IGenericReader
         return ReadArray(length, getter);
     }
 
-    [Obsolete(ObsoleteMessage, true)]
-    public T[] ReadArray<T>(int length, Func<IGenericReader, T> getter)
-    {
-        if (length == 0)
-            return [];
-
-        T[] result = GC.AllocateUninitializedArray<T>(length);
-
-        /*for (var i = 0; i < length; i++)
-            result[i] = getter(this);*/
-
-        return result;
-    }
-
     public T[] ReadArray<T>(int length, GetterFunc<T> getter)
     {
+        ArgumentNullException.ThrowIfNull(getter);
+        ReaderHelpers.ValidateGetterArrayLength<T>(length, MaxArrayAllocationSize);
         if (length == 0)
+        {
+            EnsureAvailable(0);
             return [];
+        }
 
         T[] result = GC.AllocateUninitializedArray<T>(length);
 
@@ -375,69 +340,67 @@ public ref struct GenericSpanReader : IGenericReader
 
         return result;
     }
-    
+
+    public T[] ReadArray<T, TOffset>(int length, GetterFunc<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+        where TOffset : IBinaryInteger<TOffset>
+    {
+        SeekVoid(offset, origin);
+        return ReadArray(length, getter);
+    }
+
+    // A ref struct cannot be passed as IGenericReader, so these getters cannot be called. They throw instead of being
+    // left out because the interface requires them; [Obsolete] does not stop calls through a generic TReader.
     [Obsolete(ObsoleteMessage, true)]
-    public T[] ReadArray<T, TOffset>(int length, Func<IGenericReader, T> getter, TOffset offset,
-        SeekOrigin origin = SeekOrigin.Current)
-        where TOffset : IBinaryInteger<TOffset>
+    public readonly T[] ReadArray<T>(Func<IGenericReader, T> getter) => throw new NotSupportedException(ObsoleteMessage);
+
+    [Obsolete(ObsoleteMessage, true)]
+    public readonly T[] ReadArray<T, TOffset>(Func<IGenericReader, T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+        where TOffset : IBinaryInteger<TOffset> => throw new NotSupportedException(ObsoleteMessage);
+
+    [Obsolete(ObsoleteMessage, true)]
+    public readonly T[] ReadArray<T>(int length, Func<IGenericReader, T> getter) => throw new NotSupportedException(ObsoleteMessage);
+
+    [Obsolete(ObsoleteMessage, true)]
+    public readonly T[] ReadArray<T, TOffset>(int length, Func<IGenericReader, T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current)
+        where TOffset : IBinaryInteger<TOffset> => throw new NotSupportedException(ObsoleteMessage);
+
+    public readonly GenericSpanReader Slice(int start, bool sliceAtPosition = false)
     {
-        SeekVoid(offset, origin);
-        return ReadArray(length, getter);
+        int sliceStart = sliceAtPosition ? start + _position : start;
+        return new GenericSpanReader(_span.Slice(sliceStart)) { _maxArrayAllocationSizeOffset = _maxArrayAllocationSizeOffset };
     }
 
-    public T[] ReadArray<T, TOffset>(int length, GetterFunc<T> getter, TOffset offset,
-        SeekOrigin origin = SeekOrigin.Current)
-        where TOffset : IBinaryInteger<TOffset>
+    public readonly GenericSpanReader Slice(int start, int length, bool sliceAtPosition = false)
     {
-        SeekVoid(offset, origin);
-        return ReadArray(length, getter);
+        int sliceStart = sliceAtPosition ? start + _position : start;
+        return new GenericSpanReader(_span.Slice(sliceStart, length)) { _maxArrayAllocationSizeOffset = _maxArrayAllocationSizeOffset };
     }
 
-    public GenericSpanReader Slice(int start, bool sliceAtPosition = false)
+    public readonly ReadOnlySpan<byte> AsSpan(bool sliceAtPosition = false)
     {
-        int sliceStart = sliceAtPosition ? start + Position : start;
-        return new GenericSpanReader(_span.Slice(sliceStart));
+        return sliceAtPosition ? _span.Slice(_position) : _span;
     }
 
-    public GenericSpanReader Slice(int start, int length, bool sliceAtPosition = false)
-    {
-        int sliceStart = sliceAtPosition ? start + Position : start;
-        return new GenericSpanReader(_span.Slice(sliceStart, length));
-    }
+    public ReadOnlySpan<byte> ReadSpan() => ReadSpan(ReadLength());
 
-    public Span<byte> AsSpan(bool sliceAtPosition = false)
+    public ReadOnlySpan<byte> ReadSpan(int length)
     {
-        return sliceAtPosition ? _span.Slice(Position) : _span;
-    }
-
-    public Span<byte> ReadSpan()
-    {
-        int length = Read<int>();
-        return ReadSpan(length);
-    }
-
-    public Span<byte> ReadSpan(int length)
-    {
-        Span<byte> result = _span.Slice(Position, length);
-        Position += length;
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        ReadOnlySpan<byte> result = Peek(length);
+        _position += length;
         return result;
     }
 
-    public Span<T> ReadSpan<T>() where T : struct
+    public ReadOnlySpan<T> ReadSpan<T>() where T : unmanaged => ReadSpan<T>(ReadLength());
+
+    public ReadOnlySpan<T> ReadSpan<T>(int length) where T : unmanaged
     {
-        int length = Read<int>();
-        return ReadSpan<T>(length);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        // 64-bit, so that a wrapped byte count cannot pass the check while the span keeps the full length
+        ReadOnlySpan<byte> source = Peek((long)length * Unsafe.SizeOf<T>());
+        _position += source.Length;
+        return MemoryMarshal.Cast<byte, T>(source);
     }
 
-    public Span<T> ReadSpan<T>(int length) where T : struct
-    {
-        int size = length * Unsafe.SizeOf<T>();
-        Span<byte> span = _span.Slice(Position, size);
-        ref T reference = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
-        Span<T> resultSpan = MemoryMarshal.CreateSpan(ref reference, length);
-        Position += size;
-        return resultSpan;
-    }
-
-    public void Dispose() { }
+    public readonly void Dispose() { }
 }

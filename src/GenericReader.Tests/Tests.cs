@@ -196,7 +196,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader, allows re
     }
 
     private void Add<TValue>()
-        where TValue : struct, IEquatable<TValue>
+        where TValue : unmanaged, IEquatable<TValue>
     {
         Unsafe.SkipInit(out TValue value);
         Helpers.Fill(ref value);
