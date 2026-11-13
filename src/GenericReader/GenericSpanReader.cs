@@ -1,5 +1,4 @@
-﻿#if NET9_0_OR_GREATER
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -442,4 +441,3 @@ public ref struct GenericSpanReader : IGenericReader
 
     public void Dispose() { }
 }
-#endif
