@@ -5,7 +5,6 @@ using System.Text;
 
 namespace GenericReader.Tests;
 
-#if NET9_0_OR_GREATER
 public class SpanReaderTests : IClassFixture<BinaryDataGenerator<GenericSpanReader>>
 {
     private readonly BinaryDataGenerator<GenericSpanReader> _gen;
@@ -22,7 +21,6 @@ public class SpanReaderTests : IClassFixture<BinaryDataGenerator<GenericSpanRead
         _gen.Test(ref reader);
     }
 }
-#endif
 
 public class BufferReaderTests : IClassFixture<BinaryDataGenerator<GenericBufferReader>>
 {
@@ -91,10 +89,7 @@ public class FileReaderTests : IClassFixture<BinaryDataGenerator<GenericFileRead
     }
 }
 
-public class BinaryDataGenerator<TReader> where TReader : IGenericReader
-#if NET9_0_OR_GREATER
-    , allows ref struct
-#endif
+public class BinaryDataGenerator<TReader> where TReader : IGenericReader, allows ref struct
 {
     public byte[] Data { get; }
 
@@ -129,16 +124,9 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader
     }
 }
 
-public delegate bool VerifyFunc<TReader>(ref TReader reader) where TReader : IGenericReader
-#if NET9_0_OR_GREATER
-    , allows ref struct
-#endif
-;
+public delegate bool VerifyFunc<TReader>(ref TReader reader) where TReader : IGenericReader, allows ref struct;
 
-public class BinaryDataValues<TReader> where TReader : IGenericReader
-#if NET9_0_OR_GREATER
-    , allows ref struct
-#endif
+public class BinaryDataValues<TReader> where TReader : IGenericReader, allows ref struct
 {
     public List<object> Values { get; }
     public List<VerifyFunc<TReader>> VerifyOperations { get; }
