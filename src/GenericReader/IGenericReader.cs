@@ -16,9 +16,16 @@ public interface IGenericReader : IDisposable
     public static GenericSpanReader Create(Span<byte> span) => new(span);
 
     public static GenericFileReader Create(string filePath) => new(filePath);
-    public static GenericFileReader Create(SafeFileHandle handle) => new(handle);
+    public static GenericFileReader Create(SafeFileHandle handle, bool leaveOpen = false) => new(handle, leaveOpen: leaveOpen);
 
-    public static GenericStreamReader Create(Stream stream) => new(stream);
+    public static GenericStreamReader Create(Stream stream, bool leaveOpen = false) => new(stream, leaveOpen);
+
+    // The array size in bytes that ReadArray with a getter allocates at most (256 MiB). Such arrays are allocated before
+    // any element is read, and an element may take no bytes at all, so their length cannot be checked against the data
+    // like the others.
+    public const long DefaultMaxArrayAllocationSize = 1L << 28;
+
+    long MaxArrayAllocationSize { get; set; }
 
     int Position { get; set; }
     long PositionLong { get; set; }
@@ -29,10 +36,11 @@ public interface IGenericReader : IDisposable
     TLength GetLength<TLength>() where TLength : IBinaryInteger<TLength>;
     int Seek<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
     long SeekLong<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
-    T Read<T>() where T : struct;
-    T Read<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
-    void Read<T>(Span<T> dest) where T : struct;
-    void Read<T, TOffset>(Span<T> dest, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+    void SeekVoid<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
+    T Read<T>() where T : unmanaged;
+    T Read<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged where TOffset : IBinaryInteger<TOffset>;
+    void Read<T>(Span<T> dest) where T : unmanaged;
+    void Read<T, TOffset>(Span<T> dest, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged where TOffset : IBinaryInteger<TOffset>;
     bool ReadBoolean();
     bool ReadBoolean<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
     string ReadString(Encoding enc);
@@ -45,10 +53,10 @@ public interface IGenericReader : IDisposable
     string[] ReadFStringArray<TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
     string[] ReadFStringArray(int length);
     string[] ReadFStringArray<TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
-    T[] ReadArray<T>() where T : struct;
-    T[] ReadArray<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
-    T[] ReadArray<T>(int length) where T : struct;
-    T[] ReadArray<T, TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : struct where TOffset : IBinaryInteger<TOffset>;
+    T[] ReadArray<T>() where T : unmanaged;
+    T[] ReadArray<T, TOffset>(TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged where TOffset : IBinaryInteger<TOffset>;
+    T[] ReadArray<T>(int length) where T : unmanaged;
+    T[] ReadArray<T, TOffset>(int length, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where T : unmanaged where TOffset : IBinaryInteger<TOffset>;
     T[] ReadArray<T>(Func<T> getter);
     T[] ReadArray<T, TOffset>(Func<T> getter, TOffset offset, SeekOrigin origin = SeekOrigin.Current) where TOffset : IBinaryInteger<TOffset>;
     T[] ReadArray<T>(Func<IGenericReader, T> getter);
