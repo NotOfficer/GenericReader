@@ -57,6 +57,32 @@ var numberFromSpan = spanReader.Read<uint>();
 
 ---
 
+## 🛡️ Corrupted Data
+
+Every reader checks each read against the data before it reads or allocates anything, and all readers fail the same way:
+
+| Exception | When |
+|---|---|
+| `EndOfStreamException` | The data ends before the read does, or the read starts past the end (even when it reads zero bytes) |
+| `InvalidDataException` | The data contains a length that cannot be valid: a negative length prefix, an FString length whose byte count does not fit in an `int`, or a getter array larger than `MaxArrayAllocationSize` |
+| `ArgumentOutOfRangeException` | An argument is invalid, such as a negative length, a position or seek target outside of `[0, max]`, or a negative `MaxArrayAllocationSize` |
+
+A read that fails does not move `Position`, with two exceptions:
+
+- A length prefix that was read before the failure stays read.
+- Reads made of several steps keep the steps that succeeded. The overloads with an offset keep their seek, and an array of FStrings or of getter elements keeps the elements it read.
+
+Positions past the end are allowed, as with streams; reading there fails. After `Dispose`, the buffer, file and stream readers throw `ObjectDisposedException` for every read and every access to the position; `Length` stays available. Readers over memory return `ReadOnlySpan<byte>` and `ReadOnlyMemory<byte>` views of it. If a file or stream turns out shorter than the `Length` it had when the reader was created, the read throws `EndOfStreamException`, and the destination may hold part of the data.
+
+`ReadArray` with a getter allocates the array before it reads any element, and an element may take no bytes at all, so its length cannot be checked against the data. `MaxArrayAllocationSize` limits the array size in bytes instead. The default is `IGenericReader.DefaultMaxArrayAllocationSize`, 256 MiB:
+
+```csharp
+reader.MaxArrayAllocationSize = 64 * 1024 * 1024;
+var entries = reader.ReadArray(() => new Entry(reader));
+```
+
+---
+
 ## 🤝 Contributing
 
 Contributions are **welcome and appreciated**!
