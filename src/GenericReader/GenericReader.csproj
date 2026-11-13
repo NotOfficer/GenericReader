@@ -23,4 +23,8 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="true" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="GenericReader.Tests" />
+  </ItemGroup>
+
 </Project>

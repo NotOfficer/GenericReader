@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -68,10 +69,15 @@ public class FileReaderTests : IClassFixture<BinaryDataGenerator<GenericFileRead
         File.WriteAllBytes(_filePath, _gen.Data);
     }
 
-    [Fact]
-    public void ReadAll()
+    // small caches make reads straddle the cache end, and reads larger than the cache go straight to the file
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(64)]
+    [InlineData(7)]
+    [InlineData(1)]
+    public void ReadAll(int bufferSize)
     {
-        var reader = new GenericFileReader(_filePath);
+        var reader = new GenericFileReader(_filePath, bufferSize);
 
         try
         {
@@ -120,7 +126,7 @@ public class BinaryDataGenerator<TReader> where TReader : IGenericReader, allows
             Assert.True(verifyOperation(ref reader));
         }
 
-        Assert.Equal(reader.Position, reader.Length);
+        Assert.Equal(reader.Length, reader.Position);
     }
 }
 
@@ -169,6 +175,11 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader, allows re
         AddFString(true, string.Empty);
         AddFString(true, Helpers.GetString());
         AddFString(true, Helpers.GetString(128));
+        // non-ASCII text, with surrogate pairs and multi-byte UTF-8
+        AddString(Encoding.UTF8, "Grüße, Ελληνικά, 日本語, 😀");
+        AddString(Encoding.Unicode, "Grüße, Ελληνικά, 日本語, 😀");
+        AddFString(false, "Grüße, Ελληνικά, 日本語, 😀");
+        AddFString(true, "Grüße, Ελληνικά, 日本語, 😀");
         for (int i = 0; i < 32; i++)
         {
             Add<sbyte>();
@@ -201,7 +212,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader, allows re
         Unsafe.SkipInit(out TValue value);
         Helpers.Fill(ref value);
         Values.Add(value);
-        VerifyOperations.Add((ref TReader reader) =>
+        VerifyOperations.Add((ref reader) =>
         {
             TValue readValue = reader.Read<TValue>();
             return readValue.Equals(value);
@@ -216,7 +227,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader, allows re
     {
         value ??= Helpers.GetName();
         Values.Add(value);
-        VerifyOperations.Add((ref TReader reader) =>
+        VerifyOperations.Add((ref reader) =>
         {
             string readValue = reader.ReadString(encoding);
             return readValue.Equals(value, StringComparison.Ordinal);
@@ -235,7 +246,7 @@ public class BinaryDataValues<TReader> where TReader : IGenericReader, allows re
     {
         value ??= Helpers.GetName();
         Values.Add(value);
-        VerifyOperations.Add((ref TReader reader) =>
+        VerifyOperations.Add((ref reader) =>
         {
             string readValue = reader.ReadFString();
             return readValue.Equals(value, StringComparison.Ordinal);
