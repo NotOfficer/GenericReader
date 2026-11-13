@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Description>A generic binary reader for .NET</Description>
     <PackageTags>generic, binary, reader</PackageTags>
-    <Version>3.0.0-preview.1</Version>
+    <Version>3.0.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
